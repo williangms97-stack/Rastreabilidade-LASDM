@@ -281,7 +281,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
 'use strict';
 const L = window.LASDM;
 /* Endereço do App da Web da planilha do LASDM (preencher após implantar o Apps Script; também pode ser informado no app) */
-const URL_PLANILHA = '';
+const URL_PLANILHA = 'https://script.google.com/macros/s/AKfycbyviY6zm8MIhRt2UDodqbc8aOsE8O61vM45LdEuwcAMWt43EqNQsOT_fxSKymXJtRTd7g/exec';
 const KEY = 'lasdm.v1';
 const $ = s => document.querySelector(s);
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -297,7 +297,7 @@ let db, SESSAO = null, REMOTO = { movimentos:[], prateleiras:[], refInfo:{}, em:
 function load(){
   try{ db = JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){ db = {}; }
   db = Object.assign({ url:URL_PLANILHA, mov:[], filaPrat:[], prateleiras:[], credenciais:{}, ultimoUsuario:'', embPadrao:'CX1', vinculos:{}, refEm:0 }, db);
-  if(URL_PLANILHA && !db.url) db.url = URL_PLANILHA;
+  if(URL_PLANILHA) db.url = URL_PLANILHA;   // endereço fixo: nenhum aparelho precisa digitar
 }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){ toast('Memória do aparelho cheia: sincronize e libere espaço.'); } }
 

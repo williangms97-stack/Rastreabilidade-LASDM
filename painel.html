@@ -186,7 +186,7 @@ tbody tr:hover{background:#f7fbf9}
 <script>
 'use strict';
 const L = window.LASDM;
-const URL_PLANILHA = '';
+const URL_PLANILHA = 'https://script.google.com/macros/s/AKfycbyviY6zm8MIhRt2UDodqbc8aOsE8O61vM45LdEuwcAMWt43EqNQsOT_fxSKymXJtRTd7g/exec';
 const ATUALIZA_MS = 60000;
 const $ = s => document.querySelector(s);
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -196,7 +196,7 @@ const brk = k => { const [y,m,d] = k.split('-'); return `${d}/${m}/${y}`; };
 const curto = k => { const [y,m,d] = k.split('-'); return `${d}/${m}`; };
 function dur(ms){ if(!ms||ms<0) return '0 min'; const m=Math.floor(ms/60000), d=Math.floor(m/1440), h=Math.floor((m%1440)/60); return d ? d+'d '+h+'h' : h ? h+'h '+pad(m%60)+'min' : (m%60)+' min'; }
 let URL = '';
-try{ URL = localStorage.getItem('lasdm.painel.url') || URL_PLANILHA; }catch(e){ URL = URL_PLANILHA; }
+try{ URL = URL_PLANILHA || localStorage.getItem('lasdm.painel.url') || ''; }catch(e){ URL = URL_PLANILHA; }
 if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL = d.url || ''; }catch(e){} }
 
 /* ---------- login (mesmos usuários do app) ---------- */

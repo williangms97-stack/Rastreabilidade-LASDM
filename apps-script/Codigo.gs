@@ -1,11 +1,11 @@
 /**
- * LASDM · Rastreabilidade de amostras — banco de dados na Planilha Google (versão 2)
+ * LASDM · Rastreabilidade de amostras — banco de dados na Planilha Google (versão 3)
  * Cole em Extensões → Apps Script (planilha NOVA, só para o LASDM), salve e implante como "App da Web":
  *   Executar como: Eu · Quem pode acessar: Qualquer pessoa.
  * Abas criadas sozinhas: Movimentos · Prateleiras · Referência · Usuários · Log de usuários
  * Fotos das etiquetas vão para a pasta "LASDM - Fotos das etiquetas" no Google Drive.
  */
-const VERSAO = 2;   // v2: envio da referência em partes com posição fixa (pode repetir sem duplicar) e espera pela planilha ocupada
+const VERSAO = 3;   // v3: um protocolo (ou amostra manual M) só pode estar emblocado uma vez; Pureza é volume à parte   // v2: envio da referência em partes com posição fixa (pode repetir sem duplicar) e espera pela planilha ocupada
 const ABA_MOV = 'Movimentos', ABA_PRAT = 'Prateleiras', ABA_REF = 'Referência', ABA_USR = 'Usuários', ABA_LOGUSR = 'Log de usuários';
 const CAB_MOV = ['ID', 'Data', 'Hora', 'Protocolo', 'Ação', 'Destino', 'Prateleira', 'Andar', 'Linha', 'Lado', 'Altura', 'Posição',
   'Embalagem', 'Classificação', 'Espécie', 'Cultivar', 'Lote/Origem', 'Produtor', 'Tipo de análise', 'Tipo de remessa', 'Tratamento', 'Categoria',
@@ -123,6 +123,17 @@ function lerMovimentos_() {
   return { sh, vals: n > 1 ? sh.getRange(2, 1, n - 1, CAB_MOV.length).getValues() : [] };
 }
 // estado atual de cada amostra (mesma lógica do app): última posição ocupada por quem está no arquivo ou em sala
+function emblocadas_(movs) {
+  const est = {};
+  movs.slice().sort((a, b) => a.ts - b.ts).forEach(m => {
+    if (/^Conflito|^Excluíd/.test(m.situacao || '')) return;
+    const e = est[m.protocolo] || (est[m.protocolo] = { slot: '', status: '', pos: '' });
+    if (m.acao === 'ARMAZENAR' || m.acao === 'REMANEJAR' || m.acao === 'RETORNO') { if (m.prateleira !== '') { e.slot = 1; e.pos = m.posicao; } e.status = 'ARQUIVO'; }
+    else if (m.acao === 'SALA') e.status = 'SALA';
+    else if (m.acao === 'BAIXA') { e.status = 'BAIXA'; e.slot = ''; }
+  });
+  return est;
+}
 function ocupadas_(movs) {
   const est = {};
   movs.slice().sort((a, b) => a.ts - b.ts).forEach(m => {
@@ -206,6 +217,7 @@ function doPost(e) {
       if ((m.acao === 'ARMAZENAR' || m.acao === 'REMANEJAR' || m.acao === 'RETORNO') && m.prateleira !== '' && m.prateleira != null) {
         const occ = ocupadas_(movs), k = [Number(m.prateleira), Number(m.andar), Number(m.linha), m.lado, Number(m.altura)].join('-');
         if (occ[k] && occ[k] !== m.protocolo) { situacao = 'Conflito: posição ocupada por ' + occ[k]; conflitos.push({ id: m.id, protocolo: m.protocolo, ocupante: occ[k] }); }
+        else if (m.acao === 'ARMAZENAR') { const ja = emblocadas_(movs)[m.protocolo]; if (ja && ja.slot && (ja.status === 'ARQUIVO' || ja.status === 'SALA')) { situacao = 'Conflito: protocolo já emblocado em ' + (ja.pos || 'outra posição'); conflitos.push({ id: m.id, protocolo: m.protocolo, ocupante: 'o mesmo protocolo (' + (ja.pos || '') + ')' }); } }
       }
       let urlFoto = '';
       if (m.foto) {

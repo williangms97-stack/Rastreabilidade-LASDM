@@ -529,7 +529,7 @@ async function lerTextoEtiqueta(bmp, giroQR, pts){
 }
 async function lerTextoInteiro(bmp, giroQR){
   // o texto fica 90° em relação ao QR: tenta primeiro a rotação que deixa o texto em pé
-  const tent = giroQR!=null ? [giroQR+270, giroQR+90, giroQR] : [270, 90, 0, 180];
+  const tent = giroQR!=null ? [giroQR+270, giroQR+90, giroQR] : [0, 270, 90, 180];
   let melhor = { prot:'', rem:'', cultivar:'', remessa:'' }, bruto = '';
   for(const g of tent){
     const cv = canvasGirado(bmp, g);
@@ -592,24 +592,28 @@ async function processarEtiqueta({ qr, bmp, cantos }){
       }
     }
   }catch(err){ erroOcr = err.message || String(err); }
-  if(!prot) prot = lido.prot || '';
+  if(!prot) prot = lido.prot ? L.chaveItem(lido.prot, lido.pureza) : '';
   if(codigo && prot && !peloQR){ db.vinculos[codigo] = prot; save(); }
   aguarde('');
   const ctx = { foto, lido, qr, codigo, bruto, erroOcr, peloQR };
-  if(!prot){ beep(false); abrirDigitar(ctx); return; }
+  // Pureza: o protocolo é escrito à mão → sempre confirmar o número antes de abrir
+  if(!prot || (lido.pureza && !peloQR)){ beep(!!prot); if(prot) ctx.sugestao = L.protBase(prot); abrirDigitar(ctx); return; }
   await abrirAmostra(prot, ctx);
 }
 function abrirDigitar(ctx={}){
   pauseCam();
   sheet(`<h2>Protocolo da amostra</h2>
     ${ctx.foto?`<img class="thumb" src="${ctx.foto}" alt="Foto da etiqueta">`:''}
-    ${ctx.foto?'<div class="alert warn">Não consegui ler o protocolo na etiqueta. Digite o número que aparece depois de "Prot.".</div>':''}
+    ${ctx.foto && ctx.lido && ctx.lido.pureza ? '<div class="alert warn">Etiqueta de <b>Pureza</b>: o protocolo é escrito à mão. Confira o número lido e corrija se precisar.</div>' : ctx.foto?'<div class="alert warn">Não consegui ler o protocolo na etiqueta. Digite o número que aparece depois de "Prot.".</div>':''}
     ${ctx.codigo?`<div class="small">QR lido (código <span class="mono">${esc(ctx.codigo)}</span>): fica vinculado ao protocolo, e nas próximas leituras o app já reconhece a etiqueta.</div>`:''}
-    <label class="f">Protocolo (ex.: 17215/2026)<input type="text" id="dgProt" inputmode="numeric" autocomplete="off" placeholder="17215/2026"></label>
+    <div><h3 style="margin-bottom:6px">Tipo</h3>${segHTML('dgTipo', [['S','Sistema'],['M','Manual (M)'],['P','Pureza']], ctx.lido && ctx.lido.pureza ? 'P' : ctx.lido && ctx.lido.manual ? 'M' : 'S')}</div>
+    <label class="f">Protocolo (ex.: 17215/2026 · manual: 80/2026)<input type="text" id="dgProt" inputmode="numeric" autocomplete="off" placeholder="17215/2026" value="${esc(ctx.sugestao||'')}"></label>
     <div class="row"><button class="btn ghost" id="dgCancel">Cancelar</button><button class="btn" id="dgOk">Continuar</button></div>`);
-  setTimeout(()=>$('#dgProt').focus(), 60);
+  setTimeout(()=>{ $('#dgProt').focus(); $('#dgProt').select(); }, 60);
   $('#dgCancel').onclick = fecharSheet;
-  const ok = async () => { const p = L.normProt($('#dgProt').value); if(!p){ toast('Protocolo inválido.'); return; } if(ctx.codigo){ db.vinculos[ctx.codigo] = p; save(); } await abrirAmostra(p, Object.assign(ctx, { digitado:true })); };
+  $('#dgTipo').onclick = ev => { const b = ev.target.closest('[data-v]'); if(!b) return; $('#dgTipo').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); $('#dgProt').focus(); };
+  const ok = async () => { const tipo = $('#dgTipo').querySelector('[aria-pressed=true]').dataset.v; let p = L.normProt($('#dgProt').value); if(!p){ toast('Protocolo inválido.'); return; }
+    p = tipo==='M' ? 'M' + L.protBase(p).replace(/^M/i,'') : L.chaveItem(p.replace(/^M/i,''), tipo==='P'); if(ctx.codigo){ db.vinculos[ctx.codigo] = p; save(); } await abrirAmostra(p, Object.assign(ctx, { digitado:true })); };
   $('#dgOk').onclick = ok; $('#dgProt').onkeydown = e=>{ if(e.key==='Enter') ok(); };
 }
 $('#btnManual').onclick = () => abrirDigitar();
@@ -635,26 +639,30 @@ async function conferirProtocolo(prot, lido, escolhido){
 async function abrirAmostra(prot, ctx={}){
   pauseCam();
   aguarde('Abrindo a amostra…');
-  const cf = await conferirProtocolo(prot, ctx.lido, ctx.escolhido);
+  const pureza = L.ehPureza(prot), manual = L.ehManual(prot);
+  const cf = manual ? { prot, ref:null } : await conferirProtocolo(L.protBase(prot), ctx.lido, ctx.escolhido);
+  cf.prot = L.chaveItem(cf.prot, pureza);
   ctx.opcoes = cf.opcoes || cf.outros || null; ctx.lidoProt = ctx.lidoProt || (ctx.lido && ctx.lido.prot);
   if(cf.corrigido){ prot = cf.prot; ctx.corrigido = cf.corrigido; if(ctx.codigo){ db.vinculos[ctx.codigo] = prot; save(); } }
+  else prot = cf.prot;
   const ref = cf.ref;
   recompute();
   const e = EST[prot];
   aguarde('');
   // dados: registro anterior desta amostra > etiqueta (OCR) > planilha (se houver, só como sugestão) > escolha anterior do operador
-  const lido = ctx.lido || {}, base = e && e.especie ? e : null, tipoOk = t => L.TIPOS_REMESSA.find(x=>L.up(x)===L.up(t)) || '';
+  const ePai = pureza ? EST[L.protBase(prot)] : null;
+  const lido = ctx.lido || {}, base = e && e.especie ? e : (ePai && ePai.especie ? ePai : null), tipoOk = t => L.TIPOS_REMESSA.find(x=>L.up(x)===L.up(t)) || '';
   const a = { protocolo:prot };
   a.cultivar = (base && base.cultivar) || lido.cultivar || (ref && ref.cultivar) || '';
   a.remessa = (base && base.remessa) || tipoOk(lido.remessa) || (ref && tipoOk(ref.remessa)) || '';
-  a.especie = (base && base.especie) || (ref && ref.especie) || L.inferirEspecie(a.cultivar) || db.ultEspecie || 'SOJA';
+  a.especie = (base && base.especie) || lido.especie || (ref && ref.especie) || L.inferirEspecie(a.cultivar) || db.ultEspecie || 'SOJA';
   a.tratamento = base ? (base.tratamento||'') : ref ? (ref.tratamento||'') : '';
   a.produtor = (base && base.produtor) || (ref && ref.produtor) || '';
   a.tipoAnalise = (base && base.tipoAnalise) || (ref && ref.tipoAnalise) || 'ANÁLISE PRÉVIA(CQI)';
   a.lote = (base && base.lote) || (ref && ref.lote) || '';
   a.categoria = (base && base.categoria) || (ref && ref.categoria) || '';
   if(ref && ref.data) a.dataReceb = ref.data;
-  const ctxA = { prot, ref, e, ctx, a, emb: (e && e.embalagem) || db.embPadrao || 'CX1', editar: !base };
+  const ctxA = { prot, ref, e, ctx, a, emb: pureza ? 'KRAFT' : (e && e.embalagem) || db.embPadrao || 'CX1', editar: !base };
   telaAmostra(ctxA);
 }
 function validacaoTexto(c){
@@ -720,7 +728,7 @@ function telaAmostra(c){
     ${camposHTML}
     <div id="amAudit"></div>
     <div class="card" style="background:var(--bg)"><h3>Situação atual</h3><div>${situ}</div></div>
-    <div><h3 style="margin-bottom:6px">Embalagem</h3><div class="seg" id="amEmb">${Object.entries(L.EMBALAGENS).map(([k,v])=>`<button data-emb="${k}" aria-pressed="${k===c.emb}">${v.nome}</button>`).join('')}</div></div>
+    <div><h3 style="margin-bottom:6px">Embalagem</h3><div class="seg" id="amEmb">${Object.entries(L.EMBALAGENS).map(([k,v])=>`<button data-emb="${k}" aria-pressed="${k===c.emb}" ${L.ehPureza(prot) && k!=='KRAFT'?'disabled':''}>${v.nome}</button>`).join('')}</div>${L.ehPureza(prot)?'<div class="small">Pureza: sempre em saco kraft.</div>':''}</div>
     <div id="amAcoes"></div>
     <button class="btn ghost" id="amFechar">Fechar</button>`);
   const audit = () => {
@@ -757,7 +765,7 @@ function telaAmostra(c){
 function desenharAcoes(c){
   const { a, e } = c;
   const cls = L.classificar(a);
-  $('#amChips').innerHTML = `<span class="pill ${cls.classificacao==='Protocolo'?'acc':'warn'}">${esc(cls.classificacao)}</span>${grupoPill(cls.grupo)}<span class="pill mut">${esc(cls.cultura)}</span><span class="pill mut">${cls.tratada?'Tratada':'Sem tratamento'}</span>${cls.inova?'<span class="pill bad">INOVA GENÉTICA</span>':''}`;
+  $('#amChips').innerHTML = `${L.ehPureza(a.protocolo)?'<span class="pill bad">Pureza</span>':''}<span class="pill ${cls.classificacao==='Protocolo'?'acc':'warn'}">${esc(cls.classificacao)}</span>${grupoPill(cls.grupo)}<span class="pill mut">${esc(cls.cultura)}</span><span class="pill mut">${cls.tratada?'Tratada':'Sem tratamento'}</span>${cls.inova?'<span class="pill bad">INOVA GENÉTICA</span>':''}`;
   const salas = L.SALAS.map((s,i)=>`<button class="btn sec sm" data-sala="${i}">${esc(s.replace('Sala de ','').replace(' de sementes',''))}</button>`).join('');
   let h = '';
   const st = e && e.status;
@@ -778,6 +786,8 @@ function desenharAcoes(c){
     const sug = L.sugerirPosicao(a, c.emb, EST, prateleiras(), a.protocolo); c.sug = sug.slot;
     h += sug.slot ? `<div class="posbig"><small>Retornar ao arquivo em</small>${esc(L.textoSlot(sug.slot, c.emb))}</div><button class="btn" data-acao="ARMAZENAR">Retornar ao arquivo</button>` : `<div class="alert bad">${esc(sug.motivo)}</div>`;
   }
+  if(noArquivo || (emSala && e.slot)) h = `<div class="small">${L.ehManual(a.protocolo)?'Amostra manual':'Protocolo'} já emblocado: existe uma única caixinha/saquinho por protocolo.</div>` + h;
+  if((noArquivo || emSala) && !L.ehManual(a.protocolo) && !L.ehPureza(a.protocolo)) h += `<button class="btn ghost sm" data-acao="PUREZA">É a Pureza deste protocolo? Registrar o saco de Pureza</button>`;
   h += `<h3 style="margin-top:4px">${noArquivo?'Retirar para uma sala':'Enviar para uma sala'}</h3><div class="grid2">${salas}</div>`;
   if(noArquivo) h += `<div class="row"><button class="btn ghost sm" data-acao="ESCOLHER">Remanejar posição</button><button class="btn ghost sm" data-acao="BAIXA">Dar baixa (sai do arquivo)</button></div>`;
   else if(emSala) h += `<button class="btn ghost sm" data-acao="BAIXA">Dar baixa (descarte / fim)</button>`;
@@ -792,6 +802,7 @@ function desenharAcoes(c){
     if(ac==='BAIXA'){ if(confirm('Dar baixa na amostra '+a.protocolo+'? Ela sai do arquivo e a posição fica livre.')) registrar(c, 'BAIXA', {}); return; }
     if(ac==='ESCOLHER') return escolherPosicao(c, noArquivo ? 'REMANEJAR' : 'ARMAZENAR');
     if(ac==='NOVAPRAT') return novaPrateleira(c.emb, () => abrirAmostra(a.protocolo, c.ctx));
+    if(ac==='PUREZA') return abrirAmostra(L.chaveItem(a.protocolo, true), Object.assign({}, c.ctx, { escolhido:true }));
   };
 }
 function escolherPosicao(c, acao){
@@ -819,6 +830,8 @@ function escolherPosicao(c, acao){
 }
 async function registrar(c, acao, op){
   const { a } = c, cls = L.classificar(a), agora = new Date();
+  const atual = EST[a.protocolo];
+  if(acao==='ARMAZENAR' && atual && atual.slot && (atual.status==='ARQUIVO' || atual.status==='SALA')){ toast(`${a.protocolo} já está emblocado em ${L.textoSlot(atual.slot, atual.embalagem)}. Um protocolo não pode ser emblocado duas vezes.`); return; }
   if(op.slot){ const m = L.validarPosicao(a, c.emb, op.slot, EST, prateleiras(), a.protocolo); if(m.length && acao!=='RETORNO'){ toast(m[0]); return; } }
   const m = {
     id: uid(), ts: agora.getTime(), data: br(agora), hora: hora(agora), protocolo: a.protocolo, acao, destino: op.destino || (op.slot ? 'Arquivo refrigerado' : acao==='BAIXA' ? 'Baixa' : ''),
@@ -1006,7 +1019,9 @@ async function enviar(){
     const j = await postPlanilha({ usuario:quem(), movimentos:grupo, prateleiras: primeira ? prats : [] });
     const ok = new Set(j.recebidos||[]), urls = j.fotos||{};
     db.mov.forEach(m=>{ if(ok.has(m.id)){ m.enviado = true; if(m.temFoto) fotoDel(m.id); } if(urls[m.id]) m.fotoUrl = urls[m.id]; });
-    (j.conflitos||[]).forEach(cf=>{ const m = db.mov.find(x=>x.id===cf.id); if(m){ m.situacao = 'Conflito: posição ocupada por ' + cf.ocupante; toast(`Amostra ${cf.protocolo}: a posição já estava ocupada por ${cf.ocupante} (registro feito em outro aparelho). Armazene de novo.`); } });
+    (j.conflitos||[]).forEach(cf=>{ const m = db.mov.find(x=>x.id===cf.id); if(!m) return; const mesmo = /^o mesmo protocolo/.test(cf.ocupante||'');
+      m.situacao = mesmo ? 'Conflito: protocolo já emblocado (outro aparelho)' : 'Conflito: posição ocupada por ' + cf.ocupante;
+      toast(mesmo ? `${cf.protocolo} já tinha sido emblocado por outro aparelho em ${cf.ocupante.replace(/^o mesmo protocolo \(|\)$/g,'')}. Este registro foi recusado.` : `Amostra ${cf.protocolo}: a posição já estava ocupada por ${cf.ocupante} (registro feito em outro aparelho). Armazene de novo.`); });
     if(primeira){ const pk = new Set(j.prateleiras||[]); db.filaPrat = db.filaPrat.filter(p=>!pk.has(p.id+'|'+(p.situacao||'Ativa')+'|'+p.numero)); }
     primeira = false; save();
   }

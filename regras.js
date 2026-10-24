@@ -12,16 +12,29 @@
 
   /* ---------- Protocolo (Número da Amostra) ---------- */
   // aceita "17215/2026", "Prot: 17215/2026", "17.215/2026", "17215" (ano atual)
+  /* Identificação de cada volume guardado no arquivo:
+     - protocolo do sistema: "17215/2026"
+     - amostra manual (etiqueta com M, numeração própria que também começa do 1): "M80/2026"
+     - Pureza (2º volume de um protocolo do sistema, sempre em saco kraft): "10950/2026 PUREZA" */
+  const ano4 = a => { a = String(a); return a.length === 2 ? '20' + a : a; };
+  const limpaNum = n => String(n).replace(/[.\s]/g, '').replace(/^0+(?=\d)/, '');
   function normProt(s, anoPadrao) {
-    const t = String(s == null ? '' : s);
-    let m = /(\d{1,3}(?:[.\s]\d{3})+|\d{1,7})\s*\/\s*(20\d{2})/.exec(t);
-    if (m) return m[1].replace(/[.\s]/g, '').replace(/^0+(?=\d)/, '') + '/' + m[2];
-    m = /^\s*(\d{1,7})\s*$/.exec(t);
-    if (m) return m[1].replace(/^0+(?=\d)/, '') + '/' + (anoPadrao || new Date().getFullYear());
+    const t = String(s == null ? '' : s).trim();
+    let m = /(?:^|[^A-Z0-9])M\s*[-.]?\s*(\d{1,6})\s*\/\s*(20\d{2}|\d{2})(?!\d)/.exec(' ' + t.toUpperCase());
+    if (m) return 'M' + limpaNum(m[1]) + '/' + ano4(m[2]);
+    m = /(\d{1,3}(?:[.\s]\d{3})+|\d{1,7})\s*\/\s*(20\d{2}|\d{2})(?!\d)/.exec(t);
+    if (m) return limpaNum(m[1]) + '/' + ano4(m[2]);
+    m = /^\s*(M?)\s*(\d{1,7})\s*$/i.exec(t);
+    if (m) return (m[1] ? 'M' : '') + limpaNum(m[2]) + '/' + (anoPadrao || new Date().getFullYear());
     return '';
   }
-  const protNum = p => Number(String(p).split('/')[0]) || 0;
-  const protAno = p => Number(String(p).split('/')[1]) || 0;
+  const ehManual = p => /^M/i.test(String(p || ''));
+  const ehPureza = p => /\sPUREZA$/i.test(String(p || ''));
+  const protBase = p => String(p || '').replace(/\s+PUREZA$/i, '');
+  const chaveItem = (prot, pureza) => pureza && !ehManual(prot) ? protBase(prot) + ' PUREZA' : protBase(prot);
+  const protNum = p => Number(protBase(p).replace(/^M/i, '').split('/')[0]) || 0;
+  const protAno = p => Number(protBase(p).split('/')[1]) || 0;
+  const tipoItem = p => ehManual(p) ? 'M' : ehPureza(p) ? 'P' : 'S';
   const milhar = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
   /* ---------- Tipos de remessa → grupo de prateleira ---------- */
@@ -47,7 +60,7 @@
   /* Classifica uma amostra (dados vindos das planilhas ou digitados) */
   function classificar(a) {
     const especie = up(a.especie);
-    const protocolo = CULTURAS_PROTOCOLO.indexOf(especie) >= 0;
+    const protocolo = !ehManual(a.protocolo) && CULTURAS_PROTOCOLO.indexOf(especie) >= 0;
     const tipo = up(a.tipoAnalise);
     let grupo;
     if (!protocolo) grupo = 'MANUAL';
@@ -165,6 +178,7 @@
   }
   // confere se uma posição escolhida à mão respeita as regras
   function validarPosicao(amostra, embalagem, slot, est, prateleiras, excetoProt) {
+    if (ehPureza(amostra.protocolo) && embalagem !== 'KRAFT') return ['Pureza vai sempre em saco kraft.'];
     const pr = (prateleiras || []).find(p => Number(p.numero) === Number(slot.prateleira));
     if (!pr) return ['Prateleira ' + slot.prateleira + ' não cadastrada.'];
     if (pr.situacao === 'Inativa') return ['Prateleira ' + p2(pr.numero) + ' está inativa.'];
@@ -182,20 +196,22 @@
   /* ---------- Etiqueta da linha ---------- */
   // agrupa protocolos em faixas de sequência: [13931], [13961-13964]
   function faixas(prots) {
-    const ps = prots.slice().sort((a, b) => protAno(a) - protAno(b) || protNum(a) - protNum(b));
+    const ordT = { S: 0, M: 1, P: 2 };
+    const ps = prots.slice().sort((a, b) => ordT[tipoItem(a)] - ordT[tipoItem(b)] || protAno(a) - protAno(b) || protNum(a) - protNum(b));
     const out = []; let ini = null, ant = null;
     ps.forEach(p => {
-      if (ant && protAno(p) === protAno(ant) && protNum(p) === protNum(ant) + 1) { ant = p; return; }
+      if (ant && tipoItem(p) === tipoItem(ant) && protAno(p) === protAno(ant) && protNum(p) === protNum(ant) + 1) { ant = p; return; }
       if (ini) out.push([ini, ant]); ini = p; ant = p;
     });
     if (ini) out.push([ini, ant]);
-    return out.map(([a, b]) => a === b ? milhar(protNum(a)) : milhar(protNum(a)) + ' - ' + milhar(protNum(b)));
+    const fmt = p => (ehManual(p) ? 'M ' : '') + milhar(protNum(p)) + (ehPureza(p) ? ' (P)' : '');
+    return out.map(([a, b]) => a === b ? fmt(a) : fmt(a) + ' - ' + fmt(b));
   }
   function etiquetaLinha(est, prateleira, andar, linha) {
     const am = Object.values(est).filter(e => e.slot && (e.status === 'ARQUIVO' || e.status === 'SALA') && e.slot.prateleira === Number(prateleira) && e.slot.andar === Number(andar) && e.slot.linha === Number(linha));
     const titulo = [];
     am.slice().sort((a, b) => protNum(a.protocolo) - protNum(b.protocolo)).forEach(e => {
-      const t = /DEFINITIVA/.test(up(e.tipoAnalise)) ? 'DEFINITIVA' : (String(e.remessa || '').toUpperCase().trim() || (e.classificacao === 'Protocolo' ? 'PROTOCOLO' : 'AMOSTRA MANUAL'));
+      const t = ehPureza(e.protocolo) ? 'PUREZA' : /DEFINITIVA/.test(up(e.tipoAnalise)) ? 'DEFINITIVA' : (String(e.remessa || '').toUpperCase().trim() || (e.classificacao === 'Protocolo' ? 'PROTOCOLO' : 'AMOSTRA MANUAL'));
       if (titulo.indexOf(t) < 0) titulo.push(t);
     });
     const tras = am.filter(e => /^T/.test(e.slot.lado)).map(e => e.protocolo);
@@ -242,8 +258,11 @@
     const t = String(txt || '').replace(/\r/g, '');
     const l = t.split('\n').map(s => s.trim()).filter(Boolean);
     const res = { prot: '', rem: '', cultivar: '', remessa: '' };
-    const mp = /pr[o0]t\.?\s*[:;.]?\s*([\dOIlS.\s]{1,9}\s*\/\s*2[0O]\d{2})/i.exec(t) || /(\d{1,3}[.]?\d{0,3}\s*\/\s*20\d{2})/.exec(t);
-    if (mp) res.prot = normProt(mp[1].replace(/[Oo]/g, '0').replace(/[Il]/g, '1').replace(/S/g, '5'));
+    const mm = /(?:^|\n|\s)M\s*[-.]?\s*(\d{1,6})\s*\/\s*(20\d{2}|\d{2})(?!\d)/.exec(t);
+    const mp = /pr[o0]t\.?\s*[:;.]?\s*([\dOIlS.\s]{1,9}\s*\/\s*(?:2[0O]\d{2}|\d{2}))(?!\d)/i.exec(t) || /(\d{1,3}[.]?\d{0,3}\s*\/\s*20\d{2})/.exec(t);
+    res.pureza = /PUREZA/.test(up(t));
+    if (mm && !res.pureza) { res.prot = 'M' + limpaNum(mm[1]) + '/' + ano4(mm[2]); res.manual = true; }
+    else if (mp) res.prot = normProt(mp[1].replace(/[Oo]/g, '0').replace(/[Il]/g, '1').replace(/S/g, '5'));
     const mr = /rem\.?\s*[:;.]?\s*([\dOIl]{1,8})/i.exec(t); if (mr) res.rem = mr[1].replace(/[Oo]/g, '0').replace(/[Il]/g, '1');
     // tipo de remessa: procura os nomes conhecidos
     const T = up(t).replace(/[^A-Z0-9 \n]/g, ' ');
@@ -260,7 +279,15 @@
       const n = (/\d/.test(so) ? 2 : 0) + (/[A-Z]/.test(so) ? 1 : 0) + (so.length >= 4 ? 1 : 0) + (so.length >= 6 ? 1 : 0) + (/(I2X|IPRO|CE|E3|RR|VIP|PRO\d)$/.test(corrigirCultivar(c).replace(/ /g, '')) ? 2 : 0);
       if (n > nota) { nota = n; melhor = c; }
     });
-    if (nota >= 3) res.cultivar = corrigirCultivar(melhor);
+    if (nota >= 3 && !res.manual && !res.pureza) res.cultivar = corrigirCultivar(melhor);
+    if (res.manual) {
+      const ESP = ['SOJA', 'MILHO', 'FEIJAO', 'TRIGO', 'SORGO', 'ARROZ', 'AVEIA', 'GIRASSOL', 'ALGODAO', 'CEVADA', 'CANOLA', 'BRAQUIARIA', 'MILHETO', 'CROTALARIA', 'NABO', 'ERVILHA', 'GRAO DE BICO'];
+      const linha = l.find(x => /\s-\s|–/.test(x) && !/\/\s*\d/.test(x)) || l.find(x => !/\/\s*\d/.test(x) && /[A-Z]{3,}/i.test(x)) || '';
+      linha.split(/\s*[-–]\s*/).map(x => up(x).replace(/[^A-Z ]/g, '').trim()).filter(Boolean).forEach(x => {
+        const esp = ESP.find(e => e === x || x.indexOf(e) >= 0); if (esp) { res.especie = esp; return; }
+        const rm = TIPOS_REMESSA.find(r => up(r) === x); if (rm) res.remessa = up(rm);
+      });
+    }
     return res;
   }
   // corrige siglas de tecnologia lidas errado pelo OCR: 12X/l2X → I2X, 1PRO → IPRO
@@ -316,6 +343,6 @@
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, motivosIncompat,
     EMBALAGENS, ANDARES, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
-    lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
+    ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };
 })(typeof window !== 'undefined' ? window : globalThis);

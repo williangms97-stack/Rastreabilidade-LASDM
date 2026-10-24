@@ -443,7 +443,7 @@ $('#btnEnviarRef').onclick = async () => {
     const esp = {}; todas.forEach(r=>{ esp[r.especie] = (esp[r.especie]||0)+1; });
     $('#refMsg').innerHTML = `<div class="alert ok">Planilhas enviadas: ${j.linhas} amostras de referência (${resumo}; ${novas>=0?novas+' novas':''}). Os celulares baixam a atualização na próxima sincronização.</div>`;
     $('#refPrev').innerHTML += `<div class="sub">Por espécie: ${Object.entries(esp).map(([k,v])=>esc(k)+' '+v).join(' · ')}</div>`;
-    $('#admS').value = ''; carregar();
+    $('#admS').value = ''; enviandoRef = false; carregar();
   }catch(err){ $('#refMsg').innerHTML = `<div class="alert bad">${esc(err.message||err)} Nada foi perdido: clique em "Ler e enviar" de novo.</div>`; }
   finally{ btn.disabled = false; enviandoRef = false; }
 };

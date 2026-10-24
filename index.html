@@ -386,7 +386,7 @@ async function buscarRef(prot){
 /* ================== CÂMERA (BarcodeDetector nativo + jsQR) ================== */
 const video = $('#video');
 const cnv = document.createElement('canvas'), cx = cnv.getContext('2d', { willReadFrequently:true });
-let stream = null, camOn = false, paused = false, detector, busy = false, lastRaw = '', lastAt = 0, torch = false;
+let ultimosCantos = null, stream = null, camOn = false, paused = false, detector, busy = false, lastRaw = '', lastAt = 0, torch = false;
 async function getDetector(){
   if(detector !== undefined) return detector; detector = null;
   try{ if('BarcodeDetector' in window){ const f = await BarcodeDetector.getSupportedFormats(); if(f.includes('qr_code')) detector = new BarcodeDetector({ formats:['qr_code'] }); } }catch(e){}
@@ -403,7 +403,8 @@ function jsqrRegion(src, w, h, frac, maxSide, inv){
 }
 async function decodeFrame(){
   const d = await getDetector();
-  if(d){ try{ const r = await d.detect(video); if(r.length) return r[0].rawValue; }catch(e){} }
+  if(d){ try{ const r = await d.detect(video); if(r.length){ ultimosCantos = (r[0].cornerPoints||[]).map(p=>({ x:p.x, y:p.y })); return r[0].rawValue; } }catch(e){} }
+  ultimosCantos = null;
   const w = video.videoWidth, h = video.videoHeight; if(!w) return null;
   return jsqrRegion(video, w, h, 0.68, 640) || jsqrRegion(video, w, h, 1, 900);
 }
@@ -449,8 +450,18 @@ async function onScan(text){
   if(text===lastRaw && now-lastAt<4000) return;
   lastRaw = text; lastAt = now;
   pauseCam(); beep(true);
-  let bmp = null; try{ bmp = await createImageBitmap(video); }catch(e){}
-  await processarEtiqueta({ qr:text, bmp });
+  const cantosVideo = ultimosCantos;
+  aguarde('Fotografando a etiqueta…');
+  let bmp = null, cantos = null;
+  try{
+    if(stream && window.ImageCapture){
+      const ic = new ImageCapture(stream.getVideoTracks()[0]);
+      const blob = await Promise.race([ ic.takePhoto(), new Promise((_,rej)=>setTimeout(()=>rej(new Error('tempo')), 3500)) ]);
+      bmp = await createImageBitmap(blob);
+    }
+  }catch(e){ bmp = null; }
+  if(!bmp){ try{ bmp = await createImageBitmap(video); cantos = cantosVideo; }catch(e){} }
+  await processarEtiqueta({ qr:text, bmp, cantos });
 }
 $('#btnStart').onclick = startCam;
 $('#btnStop').onclick = stopCam;
@@ -485,7 +496,38 @@ function canvasGirado(bmp, graus){
 }
 async function ocrTexto(canvas, psm){ await prepararOcr(); await ocrWorker.setParameters({ tessedit_pageseg_mode: String(psm) }); const { data } = await ocrWorker.recognize(canvas); return data.text || ''; }
 const pontos = l => (l.prot?3:0) + (l.rem?1:0) + (l.remessa?1:0) + (l.cultivar?1:0);
-async function lerTextoEtiqueta(bmp, giroQR){
+/* Recorta o bloco de texto usando o QR como régua: na etiqueta, o texto fica ao lado do QR, alinhado com ele.
+   k gira a referência (0 = como o QR foi lido); o recorte sai endireitado e ampliado para o OCR. */
+function recorteTexto(bmp, pts, k){
+  const q = [0,1,2,3].map(i=>pts[(k+i)%4]);
+  const u = { x:q[1].x-q[0].x, y:q[1].y-q[0].y }, v = { x:q[3].x-q[0].x, y:q[3].y-q[0].y };
+  const O = { x:q[0].x + u.x*1.0 - v.x*0.06, y:q[0].y + u.y*1.0 - v.y*0.06 }, U = { x:u.x*1.75, y:u.y*1.75 }, V = { x:v.x*1.12, y:v.y*1.12 };
+  const lu = Math.hypot(U.x, U.y), lv = Math.hypot(V.x, V.y); if(lu < 20) return null;
+  const W = 1100, H = Math.round(W*lv/lu);
+  const a11 = U.x/W, a12 = V.x/H, a21 = U.y/W, a22 = V.y/H, det = a11*a22 - a12*a21; if(!det) return null;
+  const i11 = a22/det, i12 = -a12/det, i21 = -a21/det, i22 = a11/det;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0,0,W,H); x.filter = 'grayscale(1) contrast(1.5)';
+  x.setTransform(i11, i21, i12, i22, -(i11*O.x + i12*O.y), -(i21*O.x + i22*O.y));
+  x.drawImage(bmp, 0, 0);
+  return c;
+}
+async function lerTextoEtiqueta(bmp, giroQR, pts){
+  if(pts && pts.length===4){
+    let melhor = { prot:'', rem:'', cultivar:'', remessa:'' }, bruto = '';
+    for(const k of [0,1,2,3]){
+      const cv = recorteTexto(bmp, pts, k); if(!cv) continue;
+      for(const psm of [6, 11]){
+        const t = await ocrTexto(cv, psm), l = L.lerEtiquetaTexto(t);
+        if(pontos(l) > pontos(melhor)){ melhor = l; bruto = t; }
+        if(melhor.prot && pontos(melhor) >= 5) return { lido:melhor, bruto };
+      }
+      if(melhor.prot) return { lido:melhor, bruto };
+    }
+  }
+  return lerTextoInteiro(bmp, giroQR);
+}
+async function lerTextoInteiro(bmp, giroQR){
   // o texto fica 90° em relação ao QR: tenta primeiro a rotação que deixa o texto em pé
   const tent = giroQR!=null ? [giroQR+270, giroQR+90, giroQR] : [270, 90, 0, 180];
   let melhor = { prot:'', rem:'', cultivar:'', remessa:'' }, bruto = '';
@@ -501,20 +543,21 @@ async function lerTextoEtiqueta(bmp, giroQR){
   return { lido:melhor, bruto };
 }
 async function lerQRdaImagem(bmp){
-  let texto = '', giro = null;
+  let texto = '', giro = null, pts = null;
   const ang = (a, b) => Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
   const d = await getDetector();
-  if(d){ try{ const r = await d.detect(bmp); if(r.length){ texto = r[0].rawValue; const p = r[0].cornerPoints; if(p && p.length===4) giro = -Math.round(ang(p[0], p[1])/90)*90; } }catch(_){} }
+  if(d){ try{ const r = await d.detect(bmp); if(r.length){ texto = r[0].rawValue; const p = r[0].cornerPoints; if(p && p.length===4){ giro = -Math.round(ang(p[0], p[1])/90)*90; pts = p.map(z=>({ x:z.x, y:z.y })); } } }catch(_){} }
   if(!texto && window.jsQR){
     for(const side of [1000, 1600, 700]){
       const sc = Math.min(1, side/Math.max(bmp.width, bmp.height));
       cnv.width = Math.round(bmp.width*sc); cnv.height = Math.round(bmp.height*sc); cx.drawImage(bmp, 0, 0, cnv.width, cnv.height);
       const im = cx.getImageData(0, 0, cnv.width, cnv.height);
       const r = jsQR(im.data, im.width, im.height, { inversionAttempts:'attemptBoth' });
-      if(r && r.data){ texto = r.data; giro = -Math.round(ang(r.location.topLeftCorner, r.location.topRightCorner)/90)*90; break; }
+      if(r && r.data){ const lc = r.location; texto = r.data; giro = -Math.round(ang(lc.topLeftCorner, lc.topRightCorner)/90)*90;
+        pts = [lc.topLeftCorner, lc.topRightCorner, lc.bottomRightCorner, lc.bottomLeftCorner].map(z=>({ x:z.x/sc, y:z.y/sc })); break; }
     }
   }
-  return { texto, giro };
+  return { texto, giro, pts };
 }
 $('#fotoEtq').onchange = async e => {
   const f = e.target.files[0]; e.target.value=''; if(!f) return;
@@ -531,7 +574,7 @@ function vinculosConhecidos(){
   todosMov().forEach(m=>{ const x = /QR (\S+)/.exec(m.lido||''); if(x && m.protocolo) v[x[1]] = m.protocolo; });
   return v;
 }
-async function processarEtiqueta({ qr, bmp }){
+async function processarEtiqueta({ qr, bmp, cantos }){
   aguarde('Lendo a etiqueta…');
   let foto = null, giro = null, lido = { prot:'', rem:'', cultivar:'', remessa:'' }, bruto = '', erroOcr = '';
   let codigo = L.codigoQR(qr), prot = L.normProt(qr||'') || (codigo && vinculosConhecidos()[codigo]) || '';
@@ -539,9 +582,14 @@ async function processarEtiqueta({ qr, bmp }){
   try{
     if(bmp){
       foto = await comprimirFoto(bmp);
-      if(!qr){ const q = await lerQRdaImagem(bmp); qr = q.texto; giro = q.giro; codigo = L.codigoQR(qr); if(!prot) prot = L.normProt(qr||'') || (codigo && vinculosConhecidos()[codigo]) || ''; }
-      // etiqueta já conhecida pelo QR: não precisa ler o texto (mais rápido). Nova: lê o texto para achar o protocolo e os dados.
-      if(!prot){ try{ const r = await lerTextoEtiqueta(bmp, giro); lido = r.lido; bruto = r.bruto; }catch(err){ erroOcr = err.message || String(err); } }
+      // etiqueta já conhecida pelo QR: não precisa ler o texto (mais rápido). Nova: localiza o QR na foto e lê o texto ao lado dele.
+      if(!prot){
+        aguarde('Lendo o texto da etiqueta…');
+        const q = await lerQRdaImagem(bmp);
+        if(!qr && q.texto){ qr = q.texto; codigo = L.codigoQR(qr); prot = L.normProt(qr||'') || (codigo && vinculosConhecidos()[codigo]) || ''; }
+        giro = q.giro; const pts = q.pts || cantos;
+        if(!prot){ try{ const r = await lerTextoEtiqueta(bmp, giro, pts); lido = r.lido; bruto = r.bruto; }catch(err){ erroOcr = err.message || String(err); } }
+      }
     }
   }catch(err){ erroOcr = err.message || String(err); }
   if(!prot) prot = lido.prot || '';

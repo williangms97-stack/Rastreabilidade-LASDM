@@ -245,7 +245,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.23</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.24</div>
     </section>
   </main>
 
@@ -271,6 +271,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
     <label class="f" id="lgSenha2Box" hidden>Repita a senha<input type="password" id="lgSenha2" autocomplete="new-password"></label>
     <div id="lgMsg"></div>
     <button class="btn" type="submit" id="lgBtn">Entrar</button>
+    <div class="small" id="lgVersao" style="text-align:center;margin-top:10px;opacity:.75"></div>
     <div class="small" id="lgUrlBox" hidden>
       Primeiro uso neste aparelho: informe o endereço da planilha.
       <input type="text" id="lgUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" inputmode="url" style="margin-top:6px">
@@ -1092,8 +1093,19 @@ async function hashSenha(sal, senha){ return hexDe(await crypto.subtle.digest('S
 const normUsr = u => String(u||'').trim().toLowerCase();
 let modoLogin = 'entrar';
 function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tipo||'bad'}">${esc(t)}</div>` : ''; }
+
+/* versão exibida na tela de login: app + script da planilha */
+async function mostrarVersao(url){
+  const el = document.getElementById('lgVersao'); if(!el) return;
+  const app = 'App versão 2026.10.24';
+  el.textContent = app + ' · Script: verificando…';
+  if(!url){ el.textContent = app; return; }
+  try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
+    el.innerHTML = app + ' · Script v' + v + (v < 3 ? ' <b style="color:#b42318">(desatualizado: implante a versão 3)</b>' : ''); }
+  catch(e){ el.textContent = app + ' · Script: sem conexão'; }
+}
 async function iniciarLogin(){
-  $('#loginScr').hidden = false; SESSAO = null; renderUsuario();
+  $('#loginScr').hidden = false; mostrarVersao(db.url); SESSAO = null; renderUsuario();
   $('#lgUrlBox').hidden = !!db.url;
   setTimeout(()=>{ try{ $('#lgUsuario').value = db.ultimoUsuario||''; ($('#lgUsuario').value ? $('#lgSenha') : $('#lgUsuario')).focus(); }catch(e){} }, 50);
   if(db.url && navigator.onLine && !Object.keys(db.credenciais||{}).length){ try{ const j = await postPlanilha({ acao:'statusUsuarios' }); if(!j.temAdmin) modoPrimeiroAcesso(); }catch(e){} }

@@ -201,7 +201,17 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 
 /* ---------- login (mesmos usuários do app) ---------- */
 let SESSAO = null; try{ SESSAO = JSON.parse(sessionStorage.getItem('lasdmPainel')||'null'); }catch(e){}
-async function lerResposta(r){ const t = await r.text(); let j; try{ j = JSON.parse(t); }catch(e){ throw new Error('A planilha não respondeu como esperado. Confira o endereço.'); } if(!j.ok) throw new Error(j.erro||'Erro na planilha'); return j; }
+async function lerResposta(r){ const t = await r.text(); let j;
+  try{ j = JSON.parse(t); }catch(e){ const det = t.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,160); const er = new Error('A planilha não respondeu como esperado' + (det ? ' (' + det + ')' : '') + '.'); er.temporario = true; throw er; }
+  if(!j.ok){ const er = new Error(j.erro||'Erro na planilha'); er.temporario = !!j.ocupada; throw er; } return j; }
+// tenta de novo quando o Google devolve erro temporário (planilha ocupada, tempo esgotado)
+async function comNovaTentativa(fn, aviso){
+  const esperas = [3000, 8000, 15000, 30000];
+  for(let i=0;;i++){
+    try{ return await fn(); }
+    catch(err){ if(i >= esperas.length || (!err.temporario && !/fetch|Failed|network/i.test(err.message))) throw err; if(aviso) aviso(i+1, esperas[i]); await new Promise(r=>setTimeout(r, esperas[i])); }
+  }
+}
 const post = body => fetch(URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body), redirect:'follow' }).then(lerResposta);
 const get = q => fetch(URL + q, { redirect:'follow' }).then(lerResposta);
 $('#lgUrlBox').hidden = !!URL;
@@ -219,8 +229,9 @@ $('#btnSair').onclick = () => { try{ sessionStorage.removeItem('lasdmPainel'); }
 /* ---------- dados ---------- */
 let DADOS = null, EST = {}, MOVS = [], REF = [], REFMAP = new Map(), ultimo = 0, carregando = false;
 const REF_DIAS = 120;
+let enviandoRef = false;
 async function carregar(){
-  if(carregando || !URL) return; carregando = true;
+  if(carregando || enviandoRef || !URL) return; carregando = true;
   $('#dot').className = 'dot busy'; $('#liveTxt').textContent = 'Atualizando…';
   try{
     const desde = Date.now() - 60*86400000;
@@ -416,18 +427,25 @@ $('#btnEnviarRef').onclick = async () => {
     const atual = (await get('?acao=ref')).ref || [];
     const todas = L.unirRef([atual, sis, man]);
     const novas = todas.length - atual.length;
-    const POR = 2000; let enviadas = 0;
-    await post({ acao:'ref', op:'inicio', admin });
-    for(let i=0; i<todas.length; i+=POR){ const parte = todas.slice(i, i+POR).map(r=>{ const o = {}; L.CAMPOS_REF.forEach(k=>o[k] = r[k]||''); return o; }); await post({ acao:'ref', op:'parte', admin, linhas:parte }); enviadas += parte.length; prog(0.1 + 0.88*enviadas/todas.length); $('#refMsg').innerHTML = `<div class="sub">Enviando… ${enviadas} de ${todas.length}</div>`; }
+    const POR = 1000; let enviadas = 0;
+    enviandoRef = true;
+    const ver = (await get('')).versao || 1;
+    await comNovaTentativa(()=>post({ acao:'ref', op:'inicio', admin }));
+    for(let i=0; i<todas.length; i+=POR){
+      const parte = todas.slice(i, i+POR).map(r=>{ const o = {}; L.CAMPOS_REF.forEach(k=>o[k] = r[k]||''); return o; });
+      await comNovaTentativa(()=>post({ acao:'ref', op:'parte', admin, ini:i, linhas:parte }), (n, ms)=>{ $('#refMsg').innerHTML = `<div class="sub">Planilha ocupada; tentando de novo esta parte (${n}ª tentativa) em ${ms/1000} s…</div>`; });
+      enviadas += parte.length; prog(0.1 + 0.88*enviadas/todas.length); $('#refMsg').innerHTML = `<div class="sub">Enviando… ${enviadas} de ${todas.length}</div>`;
+    }
     const resumo = [fs?`sistema ${sis.length}`:'', fm?`manual ${man.length}`:''].filter(Boolean).join(', ');
-    const j = await post({ acao:'ref', op:'fim', admin, resumo });
+    const j = await comNovaTentativa(()=>post({ acao:'ref', op:'fim', admin, resumo, total:todas.length }));
+    if(ver < 2) $('#refPrev').innerHTML = '<div class="alert warn">O script da planilha está na versão 1. Atualize para a versão 2 (Implantar → Gerenciar implantações → ✏️ → Nova versão) para o envio ficar à prova de falhas.</div>';
     prog(1);
     const esp = {}; todas.forEach(r=>{ esp[r.especie] = (esp[r.especie]||0)+1; });
     $('#refMsg').innerHTML = `<div class="alert ok">Planilhas enviadas: ${j.linhas} amostras de referência (${resumo}; ${novas>=0?novas+' novas':''}). Os celulares baixam a atualização na próxima sincronização.</div>`;
-    $('#refPrev').innerHTML = `<div class="sub">Por espécie: ${Object.entries(esp).map(([k,v])=>esc(k)+' '+v).join(' · ')}</div>`;
+    $('#refPrev').innerHTML += `<div class="sub">Por espécie: ${Object.entries(esp).map(([k,v])=>esc(k)+' '+v).join(' · ')}</div>`;
     $('#admS').value = ''; carregar();
-  }catch(err){ $('#refMsg').innerHTML = `<div class="alert bad">${esc(err.message||err)}</div>`; }
-  finally{ btn.disabled = false; }
+  }catch(err){ $('#refMsg').innerHTML = `<div class="alert bad">${esc(err.message||err)} Nada foi perdido: clique em "Ler e enviar" de novo.</div>`; }
+  finally{ btn.disabled = false; enviandoRef = false; }
 };
 
 /* ---------- navegação e dicas ---------- */

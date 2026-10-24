@@ -1,11 +1,11 @@
 /**
- * LASDM · Rastreabilidade de amostras — banco de dados na Planilha Google (versão 1)
+ * LASDM · Rastreabilidade de amostras — banco de dados na Planilha Google (versão 2)
  * Cole em Extensões → Apps Script (planilha NOVA, só para o LASDM), salve e implante como "App da Web":
  *   Executar como: Eu · Quem pode acessar: Qualquer pessoa.
  * Abas criadas sozinhas: Movimentos · Prateleiras · Referência · Usuários · Log de usuários
  * Fotos das etiquetas vão para a pasta "LASDM - Fotos das etiquetas" no Google Drive.
  */
-const VERSAO = 1;
+const VERSAO = 2;   // v2: envio da referência em partes com posição fixa (pode repetir sem duplicar) e espera pela planilha ocupada
 const ABA_MOV = 'Movimentos', ABA_PRAT = 'Prateleiras', ABA_REF = 'Referência', ABA_USR = 'Usuários', ABA_LOGUSR = 'Log de usuários';
 const CAB_MOV = ['ID', 'Data', 'Hora', 'Protocolo', 'Ação', 'Destino', 'Prateleira', 'Andar', 'Linha', 'Lado', 'Altura', 'Posição',
   'Embalagem', 'Classificação', 'Espécie', 'Cultivar', 'Lote/Origem', 'Produtor', 'Tipo de análise', 'Tipo de remessa', 'Tratamento', 'Categoria',
@@ -174,7 +174,7 @@ function doGet(e) {
 /* ================== POST ================== */
 function doPost(e) {
   const lock = LockService.getScriptLock();
-  lock.waitLock(28000);
+  if (!lock.tryLock(30000)) return resposta_({ ok: false, erro: 'Planilha ocupada no momento. Tente de novo em alguns segundos.', ocupada: true });
   try {
     const d = JSON.parse(e.postData.contents || '{}');
     if (d.acao && d.acao !== 'ref') { const r = usuarios_(d); if (r) return resposta_(r); }
@@ -246,14 +246,17 @@ function referencia_(d) {
   if (d.op === 'inicio') { const n = sh.getLastRow(); if (n > 1) sh.getRange(2, 1, n - 1, CAB_REF.length).clearContent(); return { ok: true }; }
   if (d.op === 'parte') {
     const linhas = (d.linhas || []).map(r => CAMPOS_REF.map(k => r[k] || '').concat([dataKeyTxt_(r.data)]));
-    if (linhas.length) { const ini = sh.getLastRow() + 1; const rg = sh.getRange(ini, 1, linhas.length, CAB_REF.length); rg.setNumberFormat('@'); rg.setValues(linhas); }
+    // com "ini" a parte vai sempre para a mesma posição: repetir uma parte que falhou não duplica linhas
+    if (linhas.length) { const ini = d.ini != null ? 2 + Number(d.ini) : sh.getLastRow() + 1; const rg = sh.getRange(ini, 1, linhas.length, CAB_REF.length); rg.setNumberFormat('@'); rg.setValues(linhas); }
     return { ok: true, gravadas: linhas.length };
   }
   if (d.op === 'fim') {
+    // remove sobras de um envio anterior maior (linhas depois do total enviado agora)
+    if (d.total != null) { const n = sh.getLastRow(), fimOk = 1 + Number(d.total); if (n > fimOk) sh.getRange(fimOk + 1, 1, n - fimOk, CAB_REF.length).clearContent(); }
     const props = PropertiesService.getScriptProperties();
     props.setProperty('REF_EM', Utilities.formatDate(new Date(), TZ(), 'dd/MM/yyyy HH:mm') + ' por ' + adm.usuario + (d.resumo ? ' (' + d.resumo + ')' : ''));
     logUsr_('Planilhas de referência atualizadas: ' + (d.resumo || ''), '-', adm.usuario);
-    return { ok: true, linhas: sh.getLastRow() - 1 };
+    return { ok: true, linhas: d.total != null ? Number(d.total) : sh.getLastRow() - 1 };
   }
   return { ok: false, erro: 'Operação inválida.' };
 }

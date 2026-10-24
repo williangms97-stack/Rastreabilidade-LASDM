@@ -249,13 +249,37 @@
     const T = up(t).replace(/[^A-Z0-9 \n]/g, ' ');
     const achados = TIPOS_REMESSA.map(x => up(x)).filter(x => new RegExp('\\b' + x.replace(/ /g, '\\s*') + '\\b').test(T)).sort((a, b) => b.length - a.length);
     if (achados.length) res.remessa = achados[0];
-    // cultivar: linha depois de "Rem." que não é o tipo de remessa
+    // cultivar: entre as linhas depois de "Rem.", a que mais parece um código de cultivar (letras + números, ex.: CZ37B39I2X, O720 I2X)
     const ir = l.findIndex(x => /rem\.?/i.test(x));
-    if (ir >= 0) {
-      const c = l.slice(ir + 1).find(x => !achados.some(a => up(x).indexOf(a) >= 0) && /[A-Z0-9]{3,}/i.test(x));
-      if (c) { const tk = up(c).replace(/[|]/g, 'I').split(' '); while (tk.length > 1 && (tk[0].replace(/[^A-Z0-9]/g, '').length <= 2)) tk.shift(); res.cultivar = tk.join(' ').replace(/[^A-Z0-9 ]/g, '').trim(); }
-    }
+    const cands = (ir >= 0 ? l.slice(ir + 1) : l).filter(x => !/pr[o0]t|rem\./i.test(x) && !achados.some(a => up(x).replace(/[^A-Z ]/g, '').trim() === a));
+    let melhor = '', nota = 0;
+    cands.forEach(x => {
+      const tk = up(x).replace(/[|!]/g, 'I').split(' ').map(t => t.replace(/[^A-Z0-9]/g, '')).filter(Boolean);
+      while (tk.length > 1 && tk[0].length <= 2) tk.shift();
+      const c = tk.join(' '), so = c.replace(/ /g, '');
+      const n = (/\d/.test(so) ? 2 : 0) + (/[A-Z]/.test(so) ? 1 : 0) + (so.length >= 4 ? 1 : 0) + (so.length >= 6 ? 1 : 0) + (/(I2X|IPRO|CE|E3|RR|VIP|PRO\d)$/.test(corrigirCultivar(c).replace(/ /g, '')) ? 2 : 0);
+      if (n > nota) { nota = n; melhor = c; }
+    });
+    if (nota >= 3) res.cultivar = corrigirCultivar(melhor);
     return res;
+  }
+  // corrige siglas de tecnologia lidas errado pelo OCR: 12X/l2X → I2X, 1PRO → IPRO
+  function corrigirCultivar(c) {
+    return up(c).replace(/[1L|!]2X\b/g, 'I2X').replace(/\b([A-Z0-9]*?)[1L|]PRO\b/g, '$1IPRO').replace(/(\d)[1L|]2X$/, '$1I2X').trim();
+  }
+  // espécie provável pela tecnologia da cultivar (soja: I2X, IPRO, CE, E3, RR; milho: VIP, PRO2/3/4, PW, TL, YH)
+  function inferirEspecie(cult) {
+    const c = up(cult).replace(/ /g, '');
+    if (!c) return '';
+    if (/(VIP\d?|PRO[234]|PWU?|TLTG|TL|YHR?|VYHR|H$|TRE)$/.test(c) || /VIP/.test(c)) return 'MILHO';
+    if (/(I2X|IPRO|CE|E3|RR|XTD|ENLIST|CONK)$/.test(c) || /I2X|IPRO/.test(c)) return 'SOJA';
+    return '';
+  }
+  // QR das etiquetas (sistema SoftSul): http://site.softsul.agr.br/clients/doismarcos/amostra?codigoamostra=67080
+  function codigoQR(txt) {
+    const t = String(txt || '').trim(); if (!t) return '';
+    const m = /codigoamostra=(\d+)/i.exec(t); if (m) return 'S' + m[1];
+    return t.length <= 80 ? t : t.slice(-80);
   }
   // compara o que foi lido na etiqueta com a planilha (tolerante a erros típicos de OCR)
   const formaOcr = s => up(s).replace(/[^A-Z0-9]/g, '').replace(/[1L|I]/g, 'I').replace(/0/g, 'O').replace(/5/g, 'S').replace(/8/g, 'B').replace(/2/g, 'Z');
@@ -292,6 +316,6 @@
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, motivosIncompat,
     EMBALAGENS, ANDARES, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
-    lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca
+    lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };
 })(typeof window !== 'undefined' ? window : globalThis);

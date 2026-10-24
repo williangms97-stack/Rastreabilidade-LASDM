@@ -78,6 +78,7 @@ input:focus,select:focus,button:focus-visible{outline:3px solid var(--accent);ou
 .seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
 .seg button{min-height:46px;border:0;background:var(--bg);font-weight:700;font-size:15px;cursor:pointer;padding:4px}
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+.seg button:disabled{opacity:.6}
 .kv{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 10px;font-size:15px;align-items:baseline}
 .kv dt{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.04em}
 .kv dd{margin:0;font-weight:600;word-break:break-word}
@@ -225,7 +226,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
       </div>
       <div class="card">
         <h3>Planilhas de referência</h3>
-        <div class="small">Usadas para conferir a etiqueta (protocolo, cultivar, tipo de remessa) e preencher os dados. Não são obrigatórias: sem elas o app registra com os dados digitados. As planilhas do sistema e manual são enviadas pelo painel.</div>
+        <div class="small">Servem para auditoria: o app funciona sem elas, com os dados da etiqueta e do operador. Quando enviadas, o app e o painel mostram onde o registro difere da planilha. As planilhas do sistema e manual são enviadas pelo painel.</div>
         <div class="raw" id="refInfo">—</div>
         <button class="btn sec" id="btnRef">Atualizar referência agora</button>
       </div>
@@ -524,34 +525,43 @@ $('#fotoEtq').onchange = async e => {
 document.querySelector('label[for=fotoEtq]').addEventListener('click', ()=>{ prepararOcr().catch(()=>{}); });
 
 /* Junta QR + foto + texto lido e abre a ficha da amostra */
+// QR do sistema (SoftSul) → protocolo, aprendido na 1ª leitura de cada etiqueta (fica salvo nos movimentos, vale para todos os aparelhos)
+function vinculosConhecidos(){
+  const v = Object.assign({}, db.vinculos);
+  todosMov().forEach(m=>{ const x = /QR (\S+)/.exec(m.lido||''); if(x && m.protocolo) v[x[1]] = m.protocolo; });
+  return v;
+}
 async function processarEtiqueta({ qr, bmp }){
   aguarde('Lendo a etiqueta…');
   let foto = null, giro = null, lido = { prot:'', rem:'', cultivar:'', remessa:'' }, bruto = '', erroOcr = '';
+  let codigo = L.codigoQR(qr), prot = L.normProt(qr||'') || (codigo && vinculosConhecidos()[codigo]) || '';
+  const peloQR = !!prot;
   try{
     if(bmp){
       foto = await comprimirFoto(bmp);
-      const q = await lerQRdaImagem(bmp); if(!qr && q.texto) qr = q.texto; giro = q.giro;
-      try{ const r = await lerTextoEtiqueta(bmp, giro); lido = r.lido; bruto = r.bruto; }catch(err){ erroOcr = err.message || String(err); }
+      if(!qr){ const q = await lerQRdaImagem(bmp); qr = q.texto; giro = q.giro; codigo = L.codigoQR(qr); if(!prot) prot = L.normProt(qr||'') || (codigo && vinculosConhecidos()[codigo]) || ''; }
+      // etiqueta já conhecida pelo QR: não precisa ler o texto (mais rápido). Nova: lê o texto para achar o protocolo e os dados.
+      if(!prot){ try{ const r = await lerTextoEtiqueta(bmp, giro); lido = r.lido; bruto = r.bruto; }catch(err){ erroOcr = err.message || String(err); } }
     }
   }catch(err){ erroOcr = err.message || String(err); }
-  // protocolo: do QR (se trouxer) → do texto lido → de um QR já vinculado antes
-  let prot = L.normProt(qr||'') || lido.prot || (qr && db.vinculos[qr]) || '';
-  if(qr && lido.prot && !L.normProt(qr)){ db.vinculos[qr] = lido.prot; save(); }
+  if(!prot) prot = lido.prot || '';
+  if(codigo && prot && !peloQR){ db.vinculos[codigo] = prot; save(); }
   aguarde('');
-  if(!prot){ beep(false); abrirDigitar({ foto, lido, qr, bruto, erroOcr }); return; }
-  await abrirAmostra(prot, { foto, lido, qr, bruto, erroOcr });
+  const ctx = { foto, lido, qr, codigo, bruto, erroOcr, peloQR };
+  if(!prot){ beep(false); abrirDigitar(ctx); return; }
+  await abrirAmostra(prot, ctx);
 }
 function abrirDigitar(ctx={}){
   pauseCam();
   sheet(`<h2>Protocolo da amostra</h2>
     ${ctx.foto?`<img class="thumb" src="${ctx.foto}" alt="Foto da etiqueta">`:''}
     ${ctx.foto?'<div class="alert warn">Não consegui ler o protocolo na etiqueta. Digite o número que aparece depois de "Prot.".</div>':''}
-    ${ctx.qr?`<div class="small">QR lido: <span class="mono">${esc(ctx.qr)}</span> (fica vinculado ao protocolo)</div>`:''}
+    ${ctx.codigo?`<div class="small">QR lido (código <span class="mono">${esc(ctx.codigo)}</span>): fica vinculado ao protocolo, e nas próximas leituras o app já reconhece a etiqueta.</div>`:''}
     <label class="f">Protocolo (ex.: 17215/2026)<input type="text" id="dgProt" inputmode="numeric" autocomplete="off" placeholder="17215/2026"></label>
     <div class="row"><button class="btn ghost" id="dgCancel">Cancelar</button><button class="btn" id="dgOk">Continuar</button></div>`);
   setTimeout(()=>$('#dgProt').focus(), 60);
   $('#dgCancel').onclick = fecharSheet;
-  const ok = async () => { const p = L.normProt($('#dgProt').value); if(!p){ toast('Protocolo inválido.'); return; } if(ctx.qr){ db.vinculos[ctx.qr] = p; save(); } await abrirAmostra(p, ctx); };
+  const ok = async () => { const p = L.normProt($('#dgProt').value); if(!p){ toast('Protocolo inválido.'); return; } if(ctx.codigo){ db.vinculos[ctx.codigo] = p; save(); } await abrirAmostra(p, Object.assign(ctx, { digitado:true })); };
   $('#dgOk').onclick = ok; $('#dgProt').onkeydown = e=>{ if(e.key==='Enter') ok(); };
 }
 $('#btnManual').onclick = () => abrirDigitar();
@@ -576,51 +586,75 @@ async function conferirProtocolo(prot, lido, escolhido){
 }
 async function abrirAmostra(prot, ctx={}){
   pauseCam();
-  aguarde('Conferindo nas planilhas…');
+  aguarde('Abrindo a amostra…');
   const cf = await conferirProtocolo(prot, ctx.lido, ctx.escolhido);
   ctx.opcoes = cf.opcoes || cf.outros || null; ctx.lidoProt = ctx.lidoProt || (ctx.lido && ctx.lido.prot);
-  if(cf.corrigido){ prot = cf.prot; ctx.corrigido = cf.corrigido; if(ctx.qr && !L.normProt(ctx.qr)){ db.vinculos[ctx.qr] = prot; save(); } }
+  if(cf.corrigido){ prot = cf.prot; ctx.corrigido = cf.corrigido; if(ctx.codigo){ db.vinculos[ctx.codigo] = prot; save(); } }
   const ref = cf.ref;
   recompute();
   const e = EST[prot];
   aguarde('');
-  // dados: planilha de referência > último registro > digitação
+  // dados: registro anterior desta amostra > etiqueta (OCR) > planilha (se houver, só como sugestão) > escolha anterior do operador
+  const lido = ctx.lido || {}, base = e && e.especie ? e : null, tipoOk = t => L.TIPOS_REMESSA.find(x=>L.up(x)===L.up(t)) || '';
   const a = { protocolo:prot };
-  CAMPOS.forEach(([k])=>{ a[k] = (ref && ref[k]) || (e && e[k]) || ''; });
+  a.cultivar = (base && base.cultivar) || lido.cultivar || (ref && ref.cultivar) || '';
+  a.remessa = (base && base.remessa) || tipoOk(lido.remessa) || (ref && tipoOk(ref.remessa)) || '';
+  a.especie = (base && base.especie) || (ref && ref.especie) || L.inferirEspecie(a.cultivar) || db.ultEspecie || 'SOJA';
+  a.tratamento = base ? (base.tratamento||'') : ref ? (ref.tratamento||'') : '';
+  a.produtor = (base && base.produtor) || (ref && ref.produtor) || '';
+  a.tipoAnalise = (base && base.tipoAnalise) || (ref && ref.tipoAnalise) || 'ANÁLISE PRÉVIA(CQI)';
+  a.lote = (base && base.lote) || (ref && ref.lote) || '';
+  a.categoria = (base && base.categoria) || (ref && ref.categoria) || '';
   if(ref && ref.data) a.dataReceb = ref.data;
-  const ctxA = { prot, ref, e, ctx, a, emb: (e && e.embalagem) || db.embPadrao || 'CX1' };
+  const ctxA = { prot, ref, e, ctx, a, emb: (e && e.embalagem) || db.embPadrao || 'CX1', editar: !base };
   telaAmostra(ctxA);
 }
 function validacaoTexto(c){
   const v = [];
-  if(c.ref) v.push('Protocolo encontrado na planilha ' + (c.ref.origem||'')); else v.push('Protocolo não encontrado nas planilhas');
+  if(c.ref){ const au = auditar(c.a, c.ref); v.push('Planilha ' + (c.ref.origem||'') + ': ' + (au.filter(x=>!x.ok).length ? 'diverge em ' + au.filter(x=>!x.ok).map(x=>x.campo).join(', ') : 'confere')); }
+  else v.push('Sem planilha de referência (dados da etiqueta e do operador)');
+  if(c.ctx.peloQR) v.push('Reconhecida pelo QR');
   if(c.ctx.corrigido) v.push('Protocolo corrigido (lido ' + c.ctx.corrigido + ')');
   if(c.ctx.lido){ const cc = L.confere(c.ctx.lido.cultivar, c.a.cultivar), cr = L.confere(c.ctx.lido.remessa, c.a.remessa);
     if(cc!==null) v.push('Cultivar ' + (cc?'confere':'diverge (etiqueta: '+c.ctx.lido.cultivar+')'));
     if(cr!==null) v.push('Remessa ' + (cr?'confere':'diverge (etiqueta: '+c.ctx.lido.remessa+')')); }
   return v.join(' · ');
 }
+// auditoria: compara o registro (etiqueta + operador) com a planilha de referência
+function auditar(a, ref){
+  if(!ref) return [];
+  const ca = L.classificar(a), cr = L.classificar(ref);
+  return [
+    { campo:'espécie', ok: ca.cultura===cr.cultura, ref: ref.especie },
+    { campo:'cultivar', ok: L.confere(a.cultivar, ref.cultivar)!==false, ref: ref.cultivar },
+    { campo:'tipo de remessa', ok: L.up(a.remessa)===L.up(ref.remessa), ref: ref.remessa },
+    { campo:'tratamento', ok: ca.tratada===cr.tratada, ref: ref.tratamento || 'sem tratamento' },
+    { campo:'produtor INOVA', ok: ca.inova===cr.inova, ref: ref.produtor }
+  ];
+}
+const segHTML = (id, ops, val, dis) => `<div class="seg" id="${id}">${ops.map(([v,t])=>`<button type="button" data-v="${esc(v)}" aria-pressed="${v===val}" ${dis?'disabled':''}>${esc(t)}</button>`).join('')}</div>`;
 function telaAmostra(c){
   const { prot, ref, e, ctx, a } = c;
-  const cls = L.classificar(a), G = L.GRUPOS[cls.grupo] || L.GRUPOS.OUTROS;
   const lido = ctx.lido || {};
-  const ck = (k) => { if(!ctx.lido) return ''; const v = k==='cultivar' ? L.confere(lido.cultivar, a.cultivar) : k==='remessa' ? L.confere(lido.remessa, a.remessa) : null;
-    return v===null ? '' : v ? '<span class="ck ok">✓ etiqueta</span>' : `<span class="ck bad">⚠ etiqueta: ${esc(lido[k])}</span>`; };
-  const edit = !ref;   // sem planilha: dados digitados
-  const camposHTML = edit ? `
-    <div class="alert warn"><b>Não encontrada nas planilhas de referência.</b> Preencha os dados para aplicar as regras de armazenamento.${lido.cultivar||lido.remessa?' Os campos já vêm com o que foi lido na etiqueta.':''}</div>
+  const espSel = ['SOJA','MILHO'].includes(L.up(a.especie)) ? L.up(a.especie) : 'OUTRA';
+  const tratada = L.classificar(a).tratada, inova = L.classificar(a).inova;
+  const ta = /DEFINITIVA/.test(L.up(a.tipoAnalise)) ? 'DEF' : /INTER|INTRA/.test(L.up(a.tipoAnalise)) ? 'INTER' : 'PREV';
+  const camposHTML = c.editar ? `
+    <div class="small">${lido.prot ? 'Dados lidos da etiqueta' + (lido.cultivar||lido.remessa ? ' (cultivar e remessa)' : '') + '. Confira e complete com 3 toques.' : 'Confira e complete os dados da amostra.'}</div>
     <div class="grid2">
-      <label class="f">Espécie<select id="amEsp"><option value="SOJA">Soja</option><option value="MILHO">Milho</option><option value="OUTRA">Outra (amostra manual)</option></select></label>
-      <label class="f" id="amEspOutraBox" hidden>Qual espécie<input type="text" id="amEspOutra" placeholder="Ex.: FEIJÃO"></label>
-      <label class="f">Cultivar<input type="text" id="amCult"></label>
+      <label class="f">Cultivar<input type="text" id="amCult" autocapitalize="characters"></label>
       <label class="f">Tipo de remessa<select id="amRem"><option value="">—</option>${L.TIPOS_REMESSA.map(t=>`<option>${t}</option>`).join('')}</select></label>
-      <label class="f">Tipo de análise<select id="amTA"><option value="ANÁLISE PRÉVIA(CQI)">Prévia (CQI)</option><option value="ANÁLISE DEFINITIVA">Definitiva</option><option value="INTER|INTRALABORATO">Inter/Intralaboratorial</option></select></label>
-      <label class="f">Tratamento<input type="text" id="amTrat" placeholder="vazio = sem tratamento"></label>
-      <label class="f">Produtor<input type="text" id="amProd" placeholder="Ex.: DOIS MARCOS SEMENTES LTDA"></label>
-      <label class="f">Lote/origem<input type="text" id="amLote"></label>
-    </div>` : `
-    <dl class="kv">${CAMPOS.filter(([k])=>a[k]).map(([k,n])=>`<dt>${n}</dt><dd>${esc(a[k])}</dd><dd>${ck(k)}</dd>`).join('')}
-      ${a.dataReceb?`<dt>Recebida em</dt><dd>${esc(a.dataReceb)}</dd><dd></dd>`:''}</dl>`;
+    </div>
+    <div><h3 style="margin-bottom:6px">Espécie</h3>${segHTML('amEsp', [['SOJA','Soja'],['MILHO','Milho'],['OUTRA','Outra']], espSel)}</div>
+    <label class="f" id="amEspOutraBox" ${espSel==='OUTRA'?'':'hidden'}>Qual espécie (vira amostra manual)<input type="text" id="amEspOutra" placeholder="Ex.: FEIJÃO" value="${espSel==='OUTRA'?esc(a.especie):''}"></label>
+    <div class="grid2">
+      <div><h3 style="margin-bottom:6px">Tratada?</h3>${segHTML('amTrat', [['N','Não'],['S','Sim']], tratada?'S':'N')}</div>
+      <div><h3 style="margin-bottom:6px">Produtor INOVA?</h3>${segHTML('amInova', [['N','Não'],['S','Sim']], inova?'S':'N')}</div>
+    </div>
+    <div><h3 style="margin-bottom:6px">Tipo de análise</h3>${segHTML('amTA', [['PREV','Prévia'],['DEF','Definitiva'],['INTER','Inter/Intralab.']], ta)}</div>
+    <label class="f">Lote/origem (opcional)<input type="text" id="amLote"></label>` : `
+    <dl class="kv">${CAMPOS.filter(([k])=>a[k]).map(([k,n])=>`<dt>${n}</dt><dd>${esc(a[k])}</dd><dd></dd>`).join('')}</dl>
+    <button class="btn ghost sm" id="amEditar">Corrigir dados da amostra</button>`;
   const situ = !e || !e.status ? 'Ainda não registrada no arquivo.' :
     e.status==='ARQUIVO' ? `No arquivo desde ${br(new Date(e.desde))} · <b class="mono">${esc(L.textoSlot(e.slot, e.embalagem))}</b>` :
     e.status==='SALA' ? `Em <b>${esc(e.local)}</b> há ${dur(Date.now()-e.desde)}${e.slot?` · posição reservada <span class="mono">${esc(L.textoSlot(e.slot, e.embalagem))}</span>`:''}` :
@@ -629,26 +663,45 @@ function telaAmostra(c){
   sheet(`
     <div class="row" style="align-items:center"><h2 style="flex:2 1 auto" class="mono">${esc(prot)}</h2>${statusPill(e)}</div>
     <div class="chips" id="amChips"></div>
-    ${ctx.foto?`<img class="thumb" src="${ctx.foto}" alt="Foto da etiqueta">`:'<div class="small">Sem foto da etiqueta (protocolo digitado).</div>'}
+    ${ctx.foto?`<img class="thumb" src="${ctx.foto}" alt="Foto da etiqueta">`:`<div class="small">Sem foto da etiqueta${ctx.digitado?' (protocolo digitado)':''}.</div>`}
+    <div class="small">${ctx.peloQR?'Reconhecida pelo QR da etiqueta.':lido.prot?`Lido na etiqueta: Prot. ${esc(lido.prot)}${lido.rem?' · Rem. '+esc(lido.rem):''}`:''}${ctx.qr && /^https?:/i.test(ctx.qr)?` · <a href="${esc(ctx.qr)}" target="_blank" rel="noopener">abrir no sistema</a>`:''}</div>
     ${ctx.erroOcr?`<div class="alert warn">Leitura do texto indisponível: ${esc(ctx.erroOcr)}</div>`:''}
     ${ctx.corrigido?`<div class="alert ok">Protocolo corrigido pela planilha: a foto foi lida como <b class="mono">${esc(ctx.corrigido)}</b>, mas a cultivar e a remessa da etiqueta batem com <b class="mono">${esc(prot)}</b>.</div>`:''}
-    ${ctx.opcoes && ctx.opcoes.length?`<div class="alert warn">${ctx.corrigido?'Também bate com a etiqueta':'A etiqueta bate com mais de um protocolo'}. Confira o número impresso e toque no certo:<div class="row" style="margin-top:8px">${ctx.opcoes.concat(ctx.corrigido?[]:[]).map(p=>`<button class="btn sec sm mono" data-outro="${esc(p)}">${esc(p)}</button>`).join('')}</div></div>`:''}
-    ${ref && ctx.lido && L.notaEtiqueta(ctx.lido, ref) < 0 ? `<div class="alert bad"><b>Atenção:</b> os dados da etiqueta não batem com a planilha para este protocolo. Confira a etiqueta antes de continuar (ou toque em Fechar e digite o protocolo).</div>`:''}
+    ${ctx.opcoes && ctx.opcoes.length?`<div class="alert warn">${ctx.corrigido?'Também bate com a etiqueta':'A etiqueta bate com mais de um protocolo'}. Confira o número impresso e toque no certo:<div class="row" style="margin-top:8px">${ctx.opcoes.map(p=>`<button class="btn sec sm mono" data-outro="${esc(p)}">${esc(p)}</button>`).join('')}</div></div>`:''}
     ${pend?`<div class="alert bad">${esc(pend.situacao)}. Armazene novamente em outra posição.</div>`:''}
     ${camposHTML}
+    <div id="amAudit"></div>
     <div class="card" style="background:var(--bg)"><h3>Situação atual</h3><div>${situ}</div></div>
     <div><h3 style="margin-bottom:6px">Embalagem</h3><div class="seg" id="amEmb">${Object.entries(L.EMBALAGENS).map(([k,v])=>`<button data-emb="${k}" aria-pressed="${k===c.emb}">${v.nome}</button>`).join('')}</div></div>
     <div id="amAcoes"></div>
     <button class="btn ghost" id="amFechar">Fechar</button>`);
-  if(edit){
-    const es = $('#amEsp'); const espIni = L.up(a.especie||'SOJA'); es.value = ['SOJA','MILHO'].includes(espIni) ? espIni : 'OUTRA'; if(es.value==='OUTRA'){ $('#amEspOutraBox').hidden=false; $('#amEspOutra').value = espIni==='OUTRA'?'':a.especie; }
-    $('#amCult').value = a.cultivar || lido.cultivar || ''; $('#amRem').value = L.up(a.remessa||lido.remessa||'') ? (L.TIPOS_REMESSA.find(t=>L.up(t)===L.up(a.remessa||lido.remessa))||'') : '';
-    $('#amTA').value = a.tipoAnalise || 'ANÁLISE PRÉVIA(CQI)'; $('#amTrat').value = a.tratamento||''; $('#amProd').value = a.produtor||''; $('#amLote').value = a.lote||'';
-    const ler = () => { a.especie = es.value==='OUTRA' ? L.up($('#amEspOutra').value||'OUTRA') : es.value; a.cultivar = L.up($('#amCult').value); a.remessa = es.value==='OUTRA' ? '' : $('#amRem').value; a.tipoAnalise = $('#amTA').value; a.tratamento = L.up($('#amTrat').value); a.produtor = L.up($('#amProd').value); a.lote = $('#amLote').value.trim(); desenharAcoes(c); };
-    es.onchange = () => { $('#amEspOutraBox').hidden = es.value!=='OUTRA'; ler(); };
-    ['#amEspOutra','#amCult','#amRem','#amTA','#amTrat','#amProd','#amLote'].forEach(id=>$(id).addEventListener('change', ler));
+  const audit = () => {
+    const el = $('#amAudit'); if(!el) return;
+    if(!ref){ el.innerHTML = '<div class="small">Planilhas de referência: amostra ainda não consta nelas (ou não foram enviadas). O registro vale assim mesmo; a conferência fica para o painel.</div>'; return; }
+    const au = auditar(a, ref), dif = au.filter(x=>!x.ok);
+    el.innerHTML = dif.length ? `<div class="alert warn"><b>Auditoria:</b> difere da planilha ${esc(ref.origem||'')} em ${dif.map(x=>`<b>${esc(x.campo)}</b> (planilha: ${esc(x.ref||'—')})`).join(', ')}. Confira a etiqueta; o registro segue com o que você informou.</div>`
+      : `<div class="small" style="color:var(--ok)">✓ Auditoria: confere com a planilha ${esc(ref.origem||'')}.</div>`;
+  };
+  if(c.editar){
+    const segVal = id => { const b = $('#'+id).querySelector('[aria-pressed=true]'); return b ? b.dataset.v : ''; };
+    $('#amCult').value = a.cultivar||''; $('#amRem').value = L.TIPOS_REMESSA.find(t=>L.up(t)===L.up(a.remessa)) || ''; $('#amLote').value = a.lote||'';
+    const ler = () => {
+      const esp = segVal('amEsp'); $('#amEspOutraBox').hidden = esp!=='OUTRA';
+      a.especie = esp==='OUTRA' ? L.up($('#amEspOutra').value || 'OUTRA') : esp;
+      a.cultivar = L.up($('#amCult').value); a.remessa = esp==='OUTRA' ? '' : $('#amRem').value; a.lote = $('#amLote').value.trim();
+      const tsi = L.up(a.remessa)==='TSI'; if(tsi) $('#amTrat').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.v==='S'));
+      const trat = segVal('amTrat')==='S';
+      a.tratamento = trat ? (L.classificar({ especie:'SOJA', tratamento:a.tratamento }).tratada && a.tratamento ? a.tratamento : 'TRATADA') : '';
+      a.produtor = segVal('amInova')==='S' ? (/INOVA/.test(L.up(a.produtor)) ? a.produtor : 'INOVA GENETICA LTDA') : (/INOVA/.test(L.up(a.produtor)) ? '' : a.produtor);
+      a.tipoAnalise = { PREV:'ANÁLISE PRÉVIA(CQI)', DEF:'ANÁLISE DEFINITIVA', INTER:'INTER|INTRALABORATO' }[segVal('amTA')];
+      db.ultEspecie = esp==='OUTRA' ? db.ultEspecie : esp; save();
+      desenharAcoes(c); audit();
+    };
+    ['amEsp','amTrat','amInova','amTA'].forEach(id=>$('#'+id).onclick = ev => { const b = ev.target.closest('[data-v]'); if(!b) return; $('#'+id).querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); ler(); });
+    ['#amEspOutra','#amCult','#amRem','#amLote'].forEach(id=>$(id).addEventListener('change', ler));
+    $('#amCult').addEventListener('change', ()=>{ const inf = L.inferirEspecie($('#amCult').value); if(inf && !e){ $('#amEsp').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x.dataset.v===inf)); ler(); } });
     ler();
-  } else desenharAcoes(c);
+  } else { desenharAcoes(c); audit(); $('#amEditar').onclick = () => { c.editar = true; telaAmostra(c); }; }
   $('#amEmb').onclick = ev => { const b = ev.target.closest('[data-emb]'); if(!b) return; c.emb = b.dataset.emb; db.embPadrao = c.emb; save(); $('#amEmb').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); desenharAcoes(c); };
   $('#amFechar').onclick = fecharSheet;
   document.querySelectorAll('[data-outro]').forEach(b=>b.onclick = () => abrirAmostra(b.dataset.outro, Object.assign({}, ctx, { escolhido:true, corrigido:ctx.lidoProt, opcoes:null })));
@@ -724,7 +777,7 @@ async function registrar(c, acao, op){
     prateleira: op.slot ? op.slot.prateleira : '', andar: op.slot ? op.slot.andar : '', linha: op.slot ? op.slot.linha : '', lado: op.slot ? op.slot.lado : '', altura: op.slot ? op.slot.altura : '',
     posicao: op.slot ? L.textoSlot(op.slot, c.emb) : '', embalagem: c.emb, classificacao: cls.classificacao,
     especie: a.especie, cultivar: a.cultivar, lote: a.lote, produtor: a.produtor, tipoAnalise: a.tipoAnalise, remessa: a.remessa, tratamento: a.tratamento, categoria: a.categoria,
-    validacao: validacaoTexto(c), lido: c.ctx.lido ? [c.ctx.lido.prot, c.ctx.lido.rem && 'Rem. '+c.ctx.lido.rem, c.ctx.lido.cultivar, c.ctx.lido.remessa].filter(Boolean).join(' · ') : '',
+    validacao: validacaoTexto(c), lido: [c.ctx.lido && c.ctx.lido.prot, c.ctx.lido && c.ctx.lido.rem && 'Rem. '+c.ctx.lido.rem, c.ctx.lido && c.ctx.lido.cultivar, c.ctx.lido && c.ctx.lido.remessa, c.ctx.codigo && 'QR '+c.ctx.codigo].filter(Boolean).join(' · '),
     usuario: quem(), aparelho: navigator.userAgent.slice(0,60), temFoto: !!c.ctx.foto, enviado: false
   };
   if(c.ctx.foto){ await fotoPut(m.id, c.ctx.foto); c.ctx.foto = null; }   // a foto vai só no primeiro movimento da leitura

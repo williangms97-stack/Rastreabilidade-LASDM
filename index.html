@@ -245,7 +245,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.24</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.24b</div>
     </section>
   </main>
 
@@ -344,7 +344,9 @@ const grupoPill = g => { const G = L.GRUPOS[g] || L.GRUPOS.OUTROS; return `<span
 const statusPill = e => !e || !e.status ? '<span class="pill mut">Nova</span>' : e.status==='ARQUIVO' ? '<span class="pill ok">No arquivo</span>' : e.status==='SALA' ? `<span class="pill warn">${esc(e.local)}</span>` : e.status==='BAIXA' ? '<span class="pill mut">Baixada</span>' : '<span class="pill mut">Registrada</span>';
 function fecharSheet(){ $('#sheetHost').innerHTML=''; resumeCam(); }
 function sheet(html, id='sbg'){ const host = $('#sheetHost'); host.innerHTML = `<div class="sheet-bg" id="${id}"><div class="sheet">${html}</div></div>`; $('#'+id).onclick = e=>{ if(e.target.id===id) fecharSheet(); }; return host; }
-function aguarde(msg){ $('#sheetHost').innerHTML = msg ? `<div class="sheet-bg"><div class="sheet" style="align-items:center;text-align:center;padding-block:32px"><div class="spinner" aria-hidden="true"></div><b>${esc(msg)}</b>${ocrWorker?'':'<div class="small">Na primeira vez leva alguns segundos a mais para baixar o leitor de texto.</div>'}</div></div>` : ''; }
+function aguarde(msg, pular){ $('#sheetHost').innerHTML = msg ? `<div class="sheet-bg"><div class="sheet" style="align-items:center;text-align:center;padding-block:32px"><div class="spinner" aria-hidden="true"></div><b>${esc(msg)}</b>${ocrWorker?'':'<div class="small">Na primeira vez leva alguns segundos a mais para baixar o leitor de texto.</div>'}${pular?'<button class="btn ghost" id="agPular" style="margin-top:8px">Digitar o protocolo agora</button>':''}</div></div>` : '';
+  if(pular) $('#agPular').onclick = pular; }
+let leituraCancelada = false;
 
 let viewAtual = 'bipar';
 function show(v){
@@ -481,14 +483,18 @@ function carregarScript(src){ return new Promise((res,rej)=>{ const s = document
 function prepararOcr(){
   if(!ocrPronto) ocrPronto = (async ()=>{
     if(!window.Tesseract) await carregarScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
-    if(!ocrWorker) ocrWorker = await Tesseract.createWorker('por');
+    if(!ocrWorker){
+      // modelo "fast": bem mais leve e rápido no celular; se não baixar, usa o padrão
+      try{ ocrWorker = await Tesseract.createWorker('por', 1, { langPath:'https://tessdata.projectnaptha.com/4.0.0_fast' }); }
+      catch(_){ ocrWorker = await Tesseract.createWorker('por'); }
+    }
     return ocrWorker;
   })().catch(e=>{ ocrPronto = null; throw e; });
   return ocrPronto;
 }
-function canvasGirado(bmp, graus){
+function canvasGirado(bmp, graus, lado){
   const g = ((graus % 360) + 360) % 360, deitado = g===90 || g===270;
-  const sc = Math.min(2.2, 1900/Math.max(bmp.width, bmp.height));
+  const sc = Math.min(2.2, (lado||1500)/Math.max(bmp.width, bmp.height));
   const w = Math.round(bmp.width*sc), h = Math.round(bmp.height*sc);
   const c = document.createElement('canvas'); c.width = deitado ? h : w; c.height = deitado ? w : h;
   const x = c.getContext('2d'); x.filter = 'grayscale(1) contrast(1.5)'; x.fillStyle = '#fff'; x.fillRect(0,0,c.width,c.height);
@@ -496,7 +502,7 @@ function canvasGirado(bmp, graus){
   return c;
 }
 async function ocrTexto(canvas, psm){ await prepararOcr(); await ocrWorker.setParameters({ tessedit_pageseg_mode: String(psm) }); const { data } = await ocrWorker.recognize(canvas); return data.text || ''; }
-const pontos = l => (l.prot?3:0) + (l.rem?1:0) + (l.remessa?1:0) + (l.cultivar?1:0);
+const pontos = l => (l.prot?3:0) + (l.rem?1:0) + (l.remessa?1:0) + (l.cultivar?1:0) + (l.manual && l.especie?1:0);
 /* Recorta o bloco de texto usando o QR como régua: na etiqueta, o texto fica ao lado do QR, alinhado com ele.
    k gira a referência (0 = como o QR foi lido); o recorte sai endireitado e ampliado para o OCR. */
 function recorteTexto(bmp, pts, k){
@@ -519,6 +525,7 @@ async function lerTextoEtiqueta(bmp, giroQR, pts){
     for(const k of [0,1,2,3]){
       const cv = recorteTexto(bmp, pts, k); if(!cv) continue;
       for(const psm of [6, 11]){
+        if(leituraCancelada) return { lido:melhor, bruto };
         const t = await ocrTexto(cv, psm), l = L.lerEtiquetaTexto(t);
         if(pontos(l) > pontos(melhor)){ melhor = l; bruto = t; }
         if(melhor.prot && pontos(melhor) >= 5) return { lido:melhor, bruto };
@@ -529,18 +536,25 @@ async function lerTextoEtiqueta(bmp, giroQR, pts){
   return lerTextoInteiro(bmp, giroQR);
 }
 async function lerTextoInteiro(bmp, giroQR){
-  // o texto fica 90° em relação ao QR: tenta primeiro a rotação que deixa o texto em pé
-  const tent = giroQR!=null ? [giroQR+270, giroQR+90, giroQR] : [0, 270, 90, 180];
-  let melhor = { prot:'', rem:'', cultivar:'', remessa:'' }, bruto = '';
+  // 1ª rodada: modo bloco (rápido) girando a foto, começando pela posição que deu certo da última vez;
+  // achou o protocolo → uma 2ª passada (texto solto) só nessa posição, para completar cultivar/remessa.
+  const base = giroQR!=null ? [giroQR+270, giroQR+90] : [db.ultGiro!=null ? db.ultGiro : 270, 270, 0, 90, 180];
+  const tent = [...new Set(base.map(g=>((g%360)+360)%360))];
+  let melhor = { prot:'', rem:'', cultivar:'', remessa:'' }, bruto = '', giroOk = null, giroMelhor = null;
   for(const g of tent){
-    const cv = canvasGirado(bmp, g);
-    for(const psm of [6, 11]){
-      const t = await ocrTexto(cv, psm), l = L.lerEtiquetaTexto(t);
-      if(pontos(l) > pontos(melhor)){ melhor = l; bruto = t; }
-      if(pontos(melhor) >= 5) return { lido:melhor, bruto };
-    }
-    if(melhor.prot) break;
+    if(leituraCancelada) break;
+    const cv = canvasGirado(bmp, g), t = await ocrTexto(cv, 6), l = L.lerEtiquetaTexto(t);
+    if(pontos(l) > pontos(melhor)){ melhor = l; bruto = t; giroMelhor = g; }
+    if(l.prot){ giroOk = g;
+      if(pontos(melhor) < 5 && !leituraCancelada){ const t2 = await ocrTexto(cv, 11), l2 = L.lerEtiquetaTexto(t2); if(pontos(l2) > pontos(melhor)){ melhor = l2; bruto = t2; } }
+      break; }
   }
+  // nenhuma posição deu o protocolo: tenta o modo "texto solto" na posição que leu mais coisa (cultivar, remessa…)
+  if(!melhor.prot && giroMelhor!=null && !leituraCancelada){
+    const t2 = await ocrTexto(canvasGirado(bmp, giroMelhor), 11), l2 = L.lerEtiquetaTexto(t2);
+    if(pontos(l2) > pontos(melhor)){ melhor = l2; bruto = t2; } if(l2.prot) giroOk = giroMelhor;
+  }
+  if(giroOk!=null && giroQR==null){ db.ultGiro = giroOk; save(); }
   return { lido:melhor, bruto };
 }
 async function lerQRdaImagem(bmp){
@@ -549,13 +563,16 @@ async function lerQRdaImagem(bmp){
   const d = await getDetector();
   if(d){ try{ const r = await d.detect(bmp); if(r.length){ texto = r[0].rawValue; const p = r[0].cornerPoints; if(p && p.length===4){ giro = -Math.round(ang(p[0], p[1])/90)*90; pts = p.map(z=>({ x:z.x, y:z.y })); } } }catch(_){} }
   if(!texto && window.jsQR){
-    for(const side of [1000, 1600, 700]){
-      const sc = Math.min(1, side/Math.max(bmp.width, bmp.height));
-      cnv.width = Math.round(bmp.width*sc); cnv.height = Math.round(bmp.height*sc); cx.drawImage(bmp, 0, 0, cnv.width, cnv.height);
+    // foto inteira em 3 tamanhos e depois o miolo (onde a etiqueta costuma estar) ampliado
+    const janelas = [[0,0,1,1000],[0,0,1,1600],[0,0,1,700],[0.15,0.1,0.7,1200],[0.25,0.15,0.5,1000]];
+    for(const [fx, fy, fr, side] of janelas){
+      const sx = bmp.width*fx, sy = bmp.height*fy, sw = bmp.width*fr, sh = bmp.height*(fy ? 1-2*fy : 1);
+      const sc = Math.min(1.6, side/Math.max(sw, sh));
+      cnv.width = Math.round(sw*sc); cnv.height = Math.round(sh*sc); cx.drawImage(bmp, sx, sy, sw, sh, 0, 0, cnv.width, cnv.height);
       const im = cx.getImageData(0, 0, cnv.width, cnv.height);
       const r = jsQR(im.data, im.width, im.height, { inversionAttempts:'attemptBoth' });
       if(r && r.data){ const lc = r.location; texto = r.data; giro = -Math.round(ang(lc.topLeftCorner, lc.topRightCorner)/90)*90;
-        pts = [lc.topLeftCorner, lc.topRightCorner, lc.bottomRightCorner, lc.bottomLeftCorner].map(z=>({ x:z.x/sc, y:z.y/sc })); break; }
+        pts = [lc.topLeftCorner, lc.topRightCorner, lc.bottomRightCorner, lc.bottomLeftCorner].map(z=>({ x:sx + z.x/sc, y:sy + z.y/sc })); break; }
     }
   }
   return { texto, giro, pts };
@@ -585,11 +602,15 @@ async function processarEtiqueta({ qr, bmp, cantos }){
       foto = await comprimirFoto(bmp);
       // etiqueta já conhecida pelo QR: não precisa ler o texto (mais rápido). Nova: localiza o QR na foto e lê o texto ao lado dele.
       if(!prot){
-        aguarde('Lendo o texto da etiqueta…');
+        leituraCancelada = false;
+        const pular = () => { leituraCancelada = true; abrirDigitar({ foto, qr, codigo }); };
+        aguarde('Lendo o texto da etiqueta…', pular);
         const q = await lerQRdaImagem(bmp);
         if(!qr && q.texto){ qr = q.texto; codigo = L.codigoQR(qr); prot = L.normProt(qr||'') || (codigo && vinculosConhecidos()[codigo]) || ''; }
         giro = q.giro; const pts = q.pts || cantos;
-        if(!prot){ try{ const r = await lerTextoEtiqueta(bmp, giro, pts); lido = r.lido; bruto = r.bruto; }catch(err){ erroOcr = err.message || String(err); } }
+        if(!prot){ if(qr) aguarde('QR lido. Lendo o protocolo ao lado…', pular);
+          try{ const r = await lerTextoEtiqueta(bmp, giro, pts); lido = r.lido; bruto = r.bruto; }catch(err){ erroOcr = err.message || String(err); } }
+        if(leituraCancelada) return; // o operador preferiu digitar
       }
     }
   }catch(err){ erroOcr = err.message || String(err); }
@@ -1097,7 +1118,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.24';
+  const app = 'App versão 2026.10.24b';
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

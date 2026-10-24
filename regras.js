@@ -263,6 +263,11 @@
     res.pureza = /PUREZA/.test(up(t));
     if (mm && !res.pureza) { res.prot = 'M' + limpaNum(mm[1]) + '/' + ano4(mm[2]); res.manual = true; }
     else if (mp) res.prot = normProt(mp[1].replace(/[Oo]/g, '0').replace(/[Il]/g, '1').replace(/S/g, '5'));
+    else {
+      // ano borrado na foto ("Prot: 13432/202%"): aproveita o número e assume o ano atual
+      const mq = /pr[o0]t\.?\s*[:;.]?\s*([\dOIlS.]{3,7})\s*\/\s*2\S{0,3}/i.exec(t);
+      if (mq) { res.prot = normProt(mq[1].replace(/[Oo]/g, '0').replace(/[Il]/g, '1').replace(/S/g, '5').replace(/\./g, '')); res.anoIncerto = true; }
+    }
     const mr = /rem\.?\s*[:;.]?\s*([\dOIl]{1,8})/i.exec(t); if (mr) res.rem = mr[1].replace(/[Oo]/g, '0').replace(/[Il]/g, '1');
     // tipo de remessa: procura os nomes conhecidos
     const T = up(t).replace(/[^A-Z0-9 \n]/g, ' ');

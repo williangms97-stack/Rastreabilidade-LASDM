@@ -287,7 +287,15 @@
     });
     const tras = am.filter(e => /^T/.test(e.slot.lado)).map(e => e.protocolo);
     const frente = am.filter(e => /^F/.test(e.slot.lado)).map(e => e.protocolo);
-    return { titulo: titulo.join(' / ') || '—', codigo: 'P. ' + p2(prateleira) + ' | A. ' + p2(andar) + ' | L. ' + p2(linha), tras: faixas(tras), frente: faixas(frente), total: am.length };
+    // linha com caixinhas de 0,5 kg: 4 colunas na ordem física (Trás 02 · Trás 01 · Frente 02 · Frente 01);
+    // caixinhas de 1 kg da mesma linha vão numa faixa "1 kg" que atravessa as 2 colunas da metade
+    const sub = am.some(e => String(e.slot.lado).length === 2);
+    const quartos = sub ? {
+      T2: faixas(am.filter(e => e.slot.lado === 'T2').map(e => e.protocolo)), T1: faixas(am.filter(e => e.slot.lado === 'T1').map(e => e.protocolo)),
+      F2: faixas(am.filter(e => e.slot.lado === 'F2').map(e => e.protocolo)), F1: faixas(am.filter(e => e.slot.lado === 'F1').map(e => e.protocolo)),
+      kgT: faixas(am.filter(e => e.slot.lado === 'T').map(e => e.protocolo)), kgF: faixas(am.filter(e => e.slot.lado === 'F').map(e => e.protocolo))
+    } : null;
+    return { titulo: titulo.join(' / ') || '—', codigo: 'P. ' + p2(prateleira) + ' | A. ' + p2(andar) + ' | L. ' + p2(linha), tras: faixas(tras), frente: faixas(frente), quartos, total: am.length };
   }
 
   /* ---------- Planilhas de referência (sistema e manual) ---------- */
@@ -480,7 +488,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.10.26r',
+    VERSAO_REGRAS: '2026.10.26s',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

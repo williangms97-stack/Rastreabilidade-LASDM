@@ -7,9 +7,9 @@
 <title>Painel LASDM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<script src="regras.js?v=2026.10.26r"></script>
+<script src="regras.js?v=2026.10.26s"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.26r'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.26s'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -135,6 +135,12 @@ tbody tr:hover{background:#f7fbf9}
 .etq .cols b{display:block;font-size:12pt}
 .etq .cols span{display:block;font-size:12pt;font-weight:600;line-height:1.35}
 .etqs{display:flex;flex-wrap:wrap;gap:10px}
+.etq .q{display:grid;grid-template-columns:repeat(4,1fr)}
+.etq .q .h{font-weight:800;font-size:9.5pt;text-align:center;padding:4px 2px 2px}
+.etq .q .kg{grid-column:span 2;text-align:center;font-size:9.5pt;font-weight:700;border-top:1px solid #000;border-bottom:1px solid #000;padding:2px;background:#eee}
+.etq .q .v{text-align:center;padding:2px 2px 6px}.etq .q .v span{display:block;font-size:10pt;font-weight:600;line-height:1.35}
+.etq .q .sep{border-left:2px dashed #000}.etq .q .qs{border-left:1px dotted #777}
+
 .vzimp{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid var(--hair);padding-top:10px}
 .vzimp .btn{height:34px;font-size:13px}
 .vzimp select{height:34px;border:1.5px solid var(--line);border-radius:8px;padding:0 8px;background:var(--surface);color:var(--ink)}
@@ -279,7 +285,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26r' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.26r' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.26s' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.26s' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -381,7 +387,7 @@ function render(){
   renderSalas();
   renderMovimentos();
   renderRefStatus();
-  $('#rodape').textContent = `Painel versão 2026.10.26r · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
+  $('#rodape').textContent = `Painel versão 2026.10.26s · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -721,8 +727,14 @@ function desenhar3D(){ if(G3.r && G3.cena) G3.r.render(G3.cena, G3.cam); }
 
 /* ---------- impressão das etiquetas de endereço (mesmo modelo do app) ---------- */
 function htmlEtiqueta(et){
-  return `<div class="etq"><div class="t">${esc(et.titulo)}</div><div class="c">${esc(et.codigo)}</div>
-    <div class="cols"><div><b>TRÁS</b>${et.tras.map(t=>`<span>${esc(t)}</span>`).join('')||'<span>—</span>'}</div><div><b>FRENTE</b>${et.frente.map(t=>`<span>${esc(t)}</span>`).join('')||'<span>—</span>'}</div></div></div>`;
+  const lst = a => a.map(t=>`<span>${esc(t)}</span>`).join('') || '<span>—</span>';
+  const topo = `<div class="etq"><div class="t">${esc(et.titulo)}</div><div class="c">${esc(et.codigo)}</div>`;
+  if(!et.quartos) return topo + `<div class="cols"><div><b>TRÁS</b>${lst(et.tras)}</div><div><b>FRENTE</b>${lst(et.frente)}</div></div></div>`;
+  // caixinhas de 0,5 kg: 4 colunas na ordem física; faixa "1 kg" quando a linha também tem caixinhas de 1 kg
+  const q = et.quartos, temKg = q.kgT.length || q.kgF.length, kg = (a, cls) => `<div class="kg ${cls}"${a.length?'':' style="background:#fff;font-weight:400"'}>${a.length ? '1 kg: ' + a.map(esc).join(' · ') : '—'}</div>`;
+  return topo + `<div class="q"><div class="h">TRÁS 02</div><div class="h qs">TRÁS 01</div><div class="h sep">FRENTE 02</div><div class="h qs">FRENTE 01</div>
+    ${temKg ? kg(q.kgT, '') + kg(q.kgF, 'sep') : ''}
+    <div class="v">${lst(q.T2)}</div><div class="v qs">${lst(q.T1)}</div><div class="v sep">${lst(q.F2)}</div><div class="v qs">${lst(q.F1)}</div></div></div>`;
 }
 function imprimirEtiquetas(lista){
   const ets = lista.map(([p,a,l])=>L.etiquetaLinha(EST, p, a, l)).filter(et=>et.total);

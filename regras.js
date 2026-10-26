@@ -335,7 +335,8 @@
   // une referências: a mais nova (ou a manual) sobrescreve a anterior do mesmo protocolo
   function unirRef(listas) {
     const m = {};
-    listas.forEach(l => (l || []).forEach(r => { m[r.prot] = Object.assign({}, m[r.prot] || {}, r); }));
+    // mesma origem (planilha reenviada): a linha nova substitui a antiga inteira (some, p.ex., um aviso de número repetido já corrigido)
+    listas.forEach(l => (l || []).forEach(r => { const a = m[r.prot]; m[r.prot] = a && a.origem === r.origem ? Object.assign({}, r) : Object.assign({}, a || {}, r); }));
     return Object.values(m).sort((a, b) => protAno(a.prot) - protAno(b.prot) || protNum(a.prot) - protNum(b.prot));
   }
   const dataRefKey = d => { const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(d || ''); return m ? m[3] + '-' + m[2] + '-' + m[1] : ''; };

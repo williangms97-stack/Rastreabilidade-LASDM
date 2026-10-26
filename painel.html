@@ -7,9 +7,9 @@
 <title>Painel LASDM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<script src="regras.js?v=2026.10.26n"></script>
+<script src="regras.js?v=2026.10.26o"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.26n'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.26o'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -125,6 +125,25 @@ tbody tr:hover{background:#f7fbf9}
 .empty{color:var(--muted);text-align:center;padding:20px;border:1.5px dashed var(--line);border-radius:10px}
 .pagina[hidden]{display:none}
 .pandares{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--ink-2)}.pandares div{display:flex;align-items:center;gap:6px;min-width:0}.pandares b{flex:0 0 auto;font-size:11px;color:var(--muted)}.pandares span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#printArea{display:none}
+.etq{border:2px solid #000;width:9.4cm;color:#000;background:#fff;font-family:Arial,Helvetica,sans-serif;break-inside:avoid;page-break-inside:avoid}
+.etq .t{text-align:center;font-weight:800;font-size:15pt;letter-spacing:.12em;padding:4px 6px 0}
+.etq .c{text-align:center;font-weight:800;font-size:17pt;padding:0 6px 4px;border-bottom:2px solid #000;letter-spacing:.03em}
+.etq .cols{display:grid;grid-template-columns:1fr 1fr}
+.etq .cols>div{padding:4px 6px 6px;text-align:center}
+.etq .cols>div+div{border-left:2px dashed #000}
+.etq .cols b{display:block;font-size:12pt}
+.etq .cols span{display:block;font-size:12pt;font-weight:600;line-height:1.35}
+.etqs{display:flex;flex-wrap:wrap;gap:10px}
+.vzimp{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid var(--hair);padding-top:10px}
+.vzimp .btn{height:34px;font-size:13px}
+.vzimp select{height:34px;border:1.5px solid var(--line);border-radius:8px;padding:0 8px;background:var(--surface);color:var(--ink)}
+@media print{
+  body *{visibility:hidden}
+  #printArea,#printArea *{visibility:visible}
+  #printArea{display:block;position:absolute;left:0;top:0;width:100%}
+  @page{margin:10mm}
+}
 </style>
 </head>
 <body>
@@ -173,6 +192,12 @@ tbody tr:hover{background:#f7fbf9}
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="sub" style="margin:0">Camada:</span><div class="seg2" id="vzCam"></div><span class="sub" style="margin:0" id="vzCont"></span></div>
           <div class="m2d" id="vz2d"></div>
           <div class="vzinfo" id="vzInfo"></div>
+          <div class="vzimp"><span class="sub" style="margin:0">Etiquetas de endereço:</span>
+            <button class="btn sec" id="impLinha" disabled title="Clique numa posição do mapa para escolher a linha">Linha selecionada</button>
+            <select id="impAndar" aria-label="Andar"><option value="1">A.01</option><option value="2">A.02</option><option value="3">A.03</option><option value="4">A.04</option></select>
+            <button class="btn sec" id="impAndarBtn">Linhas do andar</button>
+            <button class="btn sec" id="impTudo">Prateleira inteira</button>
+            <span class="sub" style="margin:0" id="impMsg"></span></div>
         </div>
       </div>
     </div>
@@ -253,7 +278,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26n' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.26n' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.26o' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.26o' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -355,7 +380,7 @@ function render(){
   renderSalas();
   renderMovimentos();
   renderRefStatus();
-  $('#rodape').textContent = `Painel versão 2026.10.26n · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
+  $('#rodape').textContent = `Painel versão 2026.10.26o · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -584,6 +609,7 @@ function renderViz(){
   }
   h += `<div class="eixo"><span></span><div style="grid-template-columns:repeat(${E.linhas},minmax(0,1fr))">${Array.from({length:E.linhas},(_,i)=>`<span>${E.linhas>8 && i%2 ? '' : 'L.'+L.p2(i+1)}</span>`).join('')}</div></div>`;
   $('#vz2d').innerHTML = h;
+  $('#impLinha').disabled = !(VZ.sel && occ[VZ.sel]); $('#impMsg').textContent = '';
   const s = VZ.sel && occ[VZ.sel]; $('#vzInfo').innerHTML = s ? tipAm(s, p).replace(/<br>/g,' · ') : '<span class="sub">Passe o mouse ou clique numa posição.</span>';
   ligarTips();
   cena3D(p, E, occ);
@@ -689,6 +715,24 @@ function vista3D(tipo){
 }
 function desenhar3D(){ if(G3.r && G3.cena) G3.r.render(G3.cena, G3.cam); }
 
+/* ---------- impressão das etiquetas de endereço (mesmo modelo do app) ---------- */
+function htmlEtiqueta(et){
+  return `<div class="etq"><div class="t">${esc(et.titulo)}</div><div class="c">${esc(et.codigo)}</div>
+    <div class="cols"><div><b>TRÁS</b>${et.tras.map(t=>`<span>${esc(t)}</span>`).join('')||'<span>—</span>'}</div><div><b>FRENTE</b>${et.frente.map(t=>`<span>${esc(t)}</span>`).join('')||'<span>—</span>'}</div></div></div>`;
+}
+function imprimirEtiquetas(lista){
+  const ets = lista.map(([p,a,l])=>L.etiquetaLinha(EST, p, a, l)).filter(et=>et.total);
+  if(!ets.length){ $('#impMsg').textContent = 'Nenhuma linha com amostras para imprimir.'; return; }
+  $('#impMsg').textContent = ets.length + (ets.length===1 ? ' etiqueta' : ' etiquetas');
+  $('#printArea').innerHTML = `<div class="etqs">${ets.map(htmlEtiqueta).join('')}</div>`;
+  setTimeout(()=>window.print(), 80);
+}
+const linhasCom = (num, andar) => { const set = new Set(); Object.values(EST).forEach(e=>{ if(e.slot && (e.status==='ARQUIVO'||e.status==='SALA') && e.slot.prateleira===num && (!andar || e.slot.andar===andar)) set.add(e.slot.andar+'|'+e.slot.linha); });
+  return [...set].map(k=>k.split('|').map(Number)).sort((a,b)=>a[0]-b[0]||a[1]-b[1]).map(([a,l])=>[num,a,l]); };
+$('#impLinha').onclick = () => { const e = VZ.sel && Object.values(EST).find(x=>x.slot && L.chaveSlot(x.slot)===VZ.sel); if(e) imprimirEtiquetas([[e.slot.prateleira, e.slot.andar, e.slot.linha]]); };
+$('#impAndarBtn').onclick = () => imprimirEtiquetas(linhasCom(VZ.num, +$('#impAndar').value));
+$('#impTudo').onclick = () => imprimirEtiquetas(linhasCom(VZ.num));
+
 /* ---------- localizar protocolo (aba Arquivo e salas) ---------- */
 function localizarProtocolo(){
   const q = $('#vzBusca').value.trim(), msg = $('#vzBuscaMsg');
@@ -707,7 +751,7 @@ function mostrarAchados(lista){
   // protocolo + a Pureza dele, se houver
   const linha = e => {
     const dados = esc([e.especie, e.cultivar, e.remessa||e.classificacao].filter(Boolean).join(' · '));
-    if(e.status==='ARQUIVO' && e.slot) return `<div class="alert ok" style="margin-top:8px"><b class="mono">${esc(e.protocolo)}</b> · <b>${esc(L.textoSlot(e.slot, e.embalagem))}</b> · ${esc(L.nomeEmb(e.embalagem))} · ${dados} <button class="btn sec" style="height:30px;margin-left:8px" data-ver="${esc(e.protocolo)}">Ver na prateleira</button></div>`;
+    if(e.status==='ARQUIVO' && e.slot) return `<div class="alert ok" style="margin-top:8px"><b class="mono">${esc(e.protocolo)}</b> · <b>${esc(L.textoSlot(e.slot, e.embalagem))}</b> · ${esc(L.nomeEmb(e.embalagem))} · ${dados} <button class="btn sec" style="height:30px;margin-left:8px" data-ver="${esc(e.protocolo)}">Ver na prateleira</button> <button class="btn sec" style="height:30px" data-imp="${esc(e.protocolo)}">Imprimir etiqueta da linha</button></div>`;
     if(e.status==='SALA') return `<div class="alert warn" style="margin-top:8px"><b class="mono">${esc(e.protocolo)}</b> está em <b>${esc(e.local)}</b> desde ${esc(new Date(e.desde).toLocaleString('pt-BR'))}${e.slotAnterior?` · saiu de ${esc(L.textoSlot(e.slotAnterior, e.embalagem))}`:''} · ${dados}</div>`;
     return `<div class="alert warn" style="margin-top:8px"><b class="mono">${esc(e.protocolo)}</b> · ${esc(e.local||'sem posição')} · ${dados}</div>`;
   };
@@ -722,7 +766,7 @@ function verNaPrateleira(prot){
 $('#vzBuscar').onclick = localizarProtocolo;
 $('#vzBusca').addEventListener('keydown', e=>{ if(e.key==='Enter') localizarProtocolo(); });
 $('#vzLimpar').onclick = () => { $('#vzBusca').value = ''; $('#vzBuscaMsg').innerHTML = ''; VZ.sel = null; renderViz(); };
-$('#vzBuscaMsg').addEventListener('click', e=>{ const b = e.target.closest('[data-loc]'); if(b){ $('#vzBusca').value = b.dataset.loc; localizarProtocolo(); return; } const v = e.target.closest('[data-ver]'); if(v) verNaPrateleira(v.dataset.ver); });
+$('#vzBuscaMsg').addEventListener('click', e=>{ const b = e.target.closest('[data-loc]'); if(b){ $('#vzBusca').value = b.dataset.loc; localizarProtocolo(); return; } const v = e.target.closest('[data-ver]'); if(v) verNaPrateleira(v.dataset.ver); const im = e.target.closest('[data-imp]'); if(im){ const x = EST[im.dataset.imp]; if(x && x.slot) imprimirEtiquetas([[x.slot.prateleira, x.slot.andar, x.slot.linha]]); } });
 
 /* ---------- início ---------- */
 $('#btnAtualizar').onclick = carregar;
@@ -734,5 +778,6 @@ function iniciar(){
 }
 if(SESSAO && URL) iniciar(); else setTimeout(()=>($('#lgUrlBox').hidden ? $('#lgUsuario') : $('#lgUrl')).focus(), 50);
 </script>
+<div id="printArea"></div>
 </body>
 </html>

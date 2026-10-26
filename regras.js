@@ -127,8 +127,9 @@
   }
 
   /* ---------- Estado atual a partir dos movimentos ----------
-     Ações: ARMAZENAR (entra/volta no arquivo), SALA (sai para uma sala; a posição fica reservada),
-            RETORNO (volta para a posição reservada), REMANEJAR (muda de posição), BAIXA (sai do arquivo; libera),
+     Ações: ARMAZENAR (entra/volta no arquivo), SALA (sai para uma sala; a posição é liberada — as caixinhas de cima descem),
+            RETORNO (registros antigos: volta para a posição anterior), REMANEJAR (muda de posição; também usado quando a caixinha desce
+            sozinha porque a de baixo foi retirada), BAIXA (sai do arquivo; libera),
             REGISTRO (só registra: amostra que não armazena) */
   const SALAS = ['Sala de análise', 'Sala de montagem', 'Sala de tratamento de sementes', 'Sala de homogeneização de sementes'];
   function estadoAtual(movs) {
@@ -143,13 +144,13 @@
       if (m.acao === 'ARMAZENAR' || m.acao === 'REMANEJAR' || m.acao === 'RETORNO') {
         if (m.prateleira) e.slot = { prateleira: Number(m.prateleira), andar: Number(m.andar), linha: Number(m.linha), lado: m.lado, altura: Number(m.altura) };
         e.local = 'Arquivo refrigerado'; e.status = 'ARQUIVO'; e.desde = m.ts;
-      } else if (m.acao === 'SALA') { e.local = m.destino; e.status = 'SALA'; e.desde = m.ts; }
+      } else if (m.acao === 'SALA') { if (e.slot) e.slotAnterior = e.slot; e.slot = null; e.local = m.destino; e.status = 'SALA'; e.desde = m.ts; }
       else if (m.acao === 'BAIXA') { e.local = 'Baixada'; e.status = 'BAIXA'; e.slot = null; e.desde = m.ts; }
       else if (m.acao === 'REGISTRO') { if (!e.status) { e.local = 'Registrada (não armazena)'; e.status = 'REGISTRO'; e.desde = m.ts; } }
     });
     return est;
   }
-  // posições ocupadas (amostras no arquivo e reservadas por quem está em sala)
+  // posições ocupadas (amostras no arquivo)
   function ocupacao(est) {
     const occ = {};
     Object.values(est).forEach(e => { if (e.slot && (e.status === 'ARQUIVO' || e.status === 'SALA')) occ[chaveSlot(e.slot)] = e; });
@@ -193,9 +194,27 @@
     const ests = Object.assign({}, est); if (excetoProt) delete ests[excetoProt];
     const ocup = ocupacao(ests)[chaveSlot(slot)];
     if (ocup) return ['Posição ocupada pela amostra ' + ocup.protocolo + '.'];
+    // apoio: da altura B para cima precisa haver caixinha/saco logo abaixo (nada fica "flutuando")
+    if (slot.altura > 1) {
+      const oc = ocupacao(ests), em = h => oc[chaveSlot(Object.assign({}, slot, { altura: h }))];
+      if (!em(slot.altura - 1)) { let h = 1; while (h < slot.altura && em(h)) h++;
+        return ['Não pode: a posição abaixo (' + nomeAltura(pr.embalagem, slot.altura - 1) + ') está vazia; a ' + (pr.embalagem === 'KRAFT' ? 'embalagem' : 'caixinha') + ' precisa ficar apoiada. Use a altura ' + nomeAltura(pr.embalagem, h) + ' desta pilha.']; }
+    }
     const x = perfisPrateleiras(ests, prateleiras)[pr.numero];
     if (x && x.perfil) { const m = motivosIncompat(perfil(amostra, pr.embalagem), x.perfil); if (m.length) return m.map(t => 'Não pode: ' + t + '.'); }
     return [];
+  }
+
+  /* Gravidade: depois de uma retirada, as caixinhas/sacos de cima descem e a pilha fica sem buracos.
+     Recebe o estado JÁ com a retirada aplicada e um endereço da pilha; devolve quem muda de altura. */
+  const chavePilha = s => [s.prateleira, s.andar, s.linha, s.lado].join('-');
+  function descerPilha(est, ref) {
+    if (!ref || !ref.prateleira) return [];
+    const k = chavePilha(ref);
+    const pilha = Object.values(est).filter(e => e.slot && e.status === 'ARQUIVO' && chavePilha(e.slot) === k).sort((a, b) => a.slot.altura - b.slot.altura);
+    const out = [];
+    pilha.forEach((e, i) => { if (e.slot.altura !== i + 1) out.push({ e, de: e.slot, para: Object.assign({}, e.slot, { altura: i + 1 }) }); });
+    return out;
   }
 
   /* ---------- Etiqueta da linha ---------- */
@@ -351,7 +370,7 @@
 
   G.LASDM = {
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, motivosIncompat,
-    EMBALAGENS, ANDARES, cabeNa, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
+    EMBALAGENS, ANDARES, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
     ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };

@@ -245,7 +245,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26c</div>
     </section>
   </main>
 
@@ -735,7 +735,7 @@ function telaAmostra(c){
     <button class="btn ghost sm" id="amEditar">Corrigir dados da amostra</button>`;
   const situ = !e || !e.status ? 'Ainda não registrada no arquivo.' :
     e.status==='ARQUIVO' ? `No arquivo desde ${br(new Date(e.desde))} · <b class="mono">${esc(L.textoSlot(e.slot, e.embalagem))}</b>` :
-    e.status==='SALA' ? `Em <b>${esc(e.local)}</b> há ${dur(Date.now()-e.desde)}${e.slot?` · posição reservada <span class="mono">${esc(L.textoSlot(e.slot, e.embalagem))}</span>`:''}` :
+    e.status==='SALA' ? `Em <b>${esc(e.local)}</b> há ${dur(Date.now()-e.desde)}${e.slotAnterior?` · saiu de <span class="mono">${esc(L.textoSlot(e.slotAnterior, e.embalagem))}</span> (posição liberada)`:''}` :
     e.status==='BAIXA' ? `Baixada em ${br(new Date(e.desde))}.` : 'Registrada (tipo de remessa que não armazena).';
   const pend = pendencias().find(m=>m.protocolo===prot);
   sheet(`
@@ -876,11 +876,24 @@ async function registrar(c, acao, op){
   db.mov.push(m);
   pendencias().filter(x=>x.protocolo===a.protocolo).forEach(x=>x.resolvido = true);
   save(); recompute();
+  // gravidade: a caixinha saiu da pilha → as de cima descem uma posição (registrado como remanejamento automático)
+  const desceram = [];
+  if(atual && atual.slot && (acao==='SALA' || acao==='BAIXA' || acao==='REMANEJAR')){
+    L.descerPilha(EST, atual.slot).forEach((d, i)=>{ const e = d.e;
+      db.mov.push({ id: uid(), ts: m.ts + 1 + i, data: m.data, hora: m.hora, protocolo: e.protocolo, acao: 'REMANEJAR', destino: 'Arquivo refrigerado',
+        prateleira: d.para.prateleira, andar: d.para.andar, linha: d.para.linha, lado: d.para.lado, altura: d.para.altura, posicao: L.textoSlot(d.para, e.embalagem),
+        embalagem: e.embalagem || '', classificacao: e.classificacao || '', especie: e.especie || '', cultivar: e.cultivar || '', lote: e.lote || '', produtor: e.produtor || '',
+        tipoAnalise: e.tipoAnalise || '', remessa: e.remessa || '', tratamento: e.tratamento || '', categoria: e.categoria || '', validacao: '', lido: '',
+        obs: `Desceu automaticamente: ${a.protocolo} foi retirada de ${L.textoSlot(atual.slot, atual.embalagem)}`,
+        usuario: quem(), aparelho: navigator.userAgent.slice(0,60), temFoto: false, enviado: false });
+      desceram.push(d); });
+    if(desceram.length){ save(); recompute(); }
+  }
   sincronizar();
-  movimentoOk(m);
+  movimentoOk(m, desceram);
 }
 const NOME_ACAO = { ARMAZENAR:'Armazenada no arquivo', RETORNO:'Retornou ao arquivo', REMANEJAR:'Posição alterada', SALA:'Enviada para sala', BAIXA:'Baixa registrada', REGISTRO:'Entrada registrada (não armazena)' };
-function movimentoOk(m){
+function movimentoOk(m, desceram){
   beep(true);
   const host = $('#sheetHost');
   host.innerHTML = `<div class="sheet-bg" id="okBg" style="align-items:center"><div class="okbox">
@@ -889,6 +902,7 @@ function movimentoOk(m){
     <div class="mono" style="font-size:20px;font-weight:700">${esc(m.protocolo)}</div>
     ${m.posicao?`<div class="posbig" style="width:100%">${esc(m.posicao)}<small>${esc(L.nomeEmb(m.embalagem))}</small></div>`:''}
     ${m.acao==='SALA'?`<div class="posbig" style="width:100%;font-family:var(--f-ui)">${esc(m.destino)}</div>`:''}
+    ${desceram && desceram.length?`<div class="alert warn" style="width:100%;text-align:left"><b>${desceram.length===1?'1 caixinha desceu':desceram.length+' caixinhas desceram'} uma posição</b> (a de baixo foi retirada). Endereços atualizados:<br>${desceram.map(d=>`<span class="mono">${esc(d.e.protocolo)}</span>: ${esc(L.nomeAltura(d.e.embalagem, d.de.altura))} → <b>${esc(L.nomeAltura(d.e.embalagem, d.para.altura))}</b>`).join('<br>')}<br><span class="small">Reimprima a etiqueta da linha se as faixas mudaram.</span></div>`:''}
     <button class="btn" id="okVoltar" style="width:100%">Bipar próxima</button></div></div>`;
   const voltar = () => { host.innerHTML=''; if(viewAtual!=='bipar') show('bipar'); else { resumeCam(); renderUltimo(); } };
   $('#okVoltar').onclick = voltar; $('#okBg').onclick = e=>{ if(e.target.id==='okBg') voltar(); };
@@ -1127,11 +1141,11 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26';
+  const app = 'App versão 2026.10.26c';
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
-    el.innerHTML = app + ' · Script v' + v + (v < 3 ? ' <b style="color:#b42318">(desatualizado: implante a versão 3)</b>' : ''); }
+    el.innerHTML = app + ' · Script v' + v + (v < 4 ? ' <b style="color:#b42318">(desatualizado: implante a versão 4)</b>' : ''); }
   catch(e){ el.textContent = app + ' · Script: sem conexão'; }
 }
 async function iniciarLogin(){

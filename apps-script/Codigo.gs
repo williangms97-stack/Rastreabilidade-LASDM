@@ -5,7 +5,7 @@
  * Abas criadas sozinhas: Movimentos · Prateleiras · Referência · Usuários · Log de usuários
  * Fotos das etiquetas vão para a pasta "LASDM - Fotos das etiquetas" no Google Drive.
  */
-const VERSAO = 3;   // v3: um protocolo (ou amostra manual M) só pode estar emblocado uma vez; Pureza é volume à parte   // v2: envio da referência em partes com posição fixa (pode repetir sem duplicar) e espera pela planilha ocupada
+const VERSAO = 4;   // v4: ida para sala libera a posição (as caixinhas de cima descem: o app envia os remanejamentos) · v3: um protocolo (ou amostra manual M) só pode estar emblocado uma vez; Pureza é volume à parte   // v2: envio da referência em partes com posição fixa (pode repetir sem duplicar) e espera pela planilha ocupada
 const ABA_MOV = 'Movimentos', ABA_PRAT = 'Prateleiras', ABA_REF = 'Referência', ABA_USR = 'Usuários', ABA_LOGUSR = 'Log de usuários';
 const CAB_MOV = ['ID', 'Data', 'Hora', 'Protocolo', 'Ação', 'Destino', 'Prateleira', 'Andar', 'Linha', 'Lado', 'Altura', 'Posição',
   'Embalagem', 'Classificação', 'Espécie', 'Cultivar', 'Lote/Origem', 'Produtor', 'Tipo de análise', 'Tipo de remessa', 'Tratamento', 'Categoria',
@@ -122,14 +122,14 @@ function lerMovimentos_() {
   const sh = abaCom_(ABA_MOV, CAB_MOV), n = sh.getLastRow();
   return { sh, vals: n > 1 ? sh.getRange(2, 1, n - 1, CAB_MOV.length).getValues() : [] };
 }
-// estado atual de cada amostra (mesma lógica do app): última posição ocupada por quem está no arquivo ou em sala
+// estado atual de cada amostra (mesma lógica do app): posição de quem está no arquivo (sala e baixa liberam a posição)
 function emblocadas_(movs) {
   const est = {};
   movs.slice().sort((a, b) => a.ts - b.ts).forEach(m => {
     if (/^Conflito|^Excluíd/.test(m.situacao || '')) return;
     const e = est[m.protocolo] || (est[m.protocolo] = { slot: '', status: '', pos: '' });
     if (m.acao === 'ARMAZENAR' || m.acao === 'REMANEJAR' || m.acao === 'RETORNO') { if (m.prateleira !== '') { e.slot = 1; e.pos = m.posicao; } e.status = 'ARQUIVO'; }
-    else if (m.acao === 'SALA') e.status = 'SALA';
+    else if (m.acao === 'SALA') { e.status = 'SALA'; e.slot = ''; }
     else if (m.acao === 'BAIXA') { e.status = 'BAIXA'; e.slot = ''; }
   });
   return est;
@@ -140,7 +140,7 @@ function ocupadas_(movs) {
     if (/^Conflito|^Excluíd/.test(m.situacao || '')) return;
     const e = est[m.protocolo] || (est[m.protocolo] = { slot: '', status: '' });
     if (m.acao === 'ARMAZENAR' || m.acao === 'REMANEJAR' || m.acao === 'RETORNO') { if (m.prateleira !== '') e.slot = [m.prateleira, m.andar, m.linha, m.lado, m.altura].join('-'); e.status = 'ARQUIVO'; }
-    else if (m.acao === 'SALA') e.status = 'SALA';
+    else if (m.acao === 'SALA') { e.status = 'SALA'; e.slot = ''; }
     else if (m.acao === 'BAIXA') { e.status = 'BAIXA'; e.slot = ''; }
   });
   const occ = {};

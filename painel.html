@@ -169,7 +169,7 @@ tbody tr:hover{background:#f7fbf9}
         </div>
       </div>
     </div>
-    <div class="card" style="margin-top:18px"><div><h2>Amostras fora do arquivo (em salas)</h2><div class="sub">A posição no arquivo fica reservada até o retorno</div></div><div id="tbSalas"></div></div>
+    <div class="card" style="margin-top:18px"><div><h2>Amostras fora do arquivo (em salas)</h2><div class="sub">Ao sair para a sala a posição é liberada e as caixinhas de cima descem; no retorno o app sugere uma nova posição</div></div><div id="tbSalas"></div></div>
   </section>
 
   <!-- CONCILIAÇÃO -->
@@ -246,11 +246,11 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26b';
+  const app = 'App versão 2026.10.26c';
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
-    el.innerHTML = app + ' · Script v' + v + (v < 3 ? ' <b style="color:#b42318">(desatualizado: implante a versão 3)</b>' : ''); }
+    el.innerHTML = app + ' · Script v' + v + (v < 4 ? ' <b style="color:#b42318">(desatualizado: implante a versão 4)</b>' : ''); }
   catch(e){ el.textContent = app + ' · Script: sem conexão'; }
 }
 mostrarVersao(URL);
@@ -399,7 +399,7 @@ function renderSalas(){
     { k:'desde', t:'Há', v:e=>agora-e.desde, h:e=>{ const d = agora-e.desde; return `<span class="pill ${d>3*86400000?'warn':'mut'}">${dur(d)}</span>`; } },
     { k:'cultivar', t:'Cultivar', h:e=>esc(e.cultivar||'') },
     { k:'remessa', t:'Remessa', h:e=>esc(e.remessa||e.classificacao||'') },
-    { k:'slot', t:'Posição reservada', v:e=>e.slot?L.chaveSlot(e.slot):'', h:e=>e.slot?esc(L.textoSlot(e.slot, e.embalagem)):'—' },
+    { k:'slot', t:'Saiu de', v:e=>e.slotAnterior?L.chaveSlot(e.slotAnterior):'', h:e=>e.slotAnterior?esc(L.textoSlot(e.slotAnterior, e.embalagem)):'—' },
     { k:'usuario', t:'Por', h:e=>esc(e.usuario||'') } ], em, 'Nenhuma amostra em sala agora.', ['desde', 1]);
 }
 const NOME = { ARMAZENAR:'Armazenar', SALA:'Sala', RETORNO:'Retorno', REMANEJAR:'Remanejar', BAIXA:'Baixa', REGISTRO:'Registro' };
@@ -541,7 +541,7 @@ function renderViz(){
   // legenda: grupos presentes
   const grupos = [...new Set(Object.values(occ).map(e=>L.classificar(e).grupo))];
   $('#vzLeg').innerHTML = grupos.map(g=>{ const G = L.GRUPOS[g]||L.GRUPOS.OUTROS; return `<span><i style="background:${G.cor}"></i>${esc(G.curto||g)}</span>`; }).join('')
-    + `<span><i style="background:${COR_SALA}"></i>Em sala (posição reservada)</span><span><i style="background:#eef2f0"></i>Livre</span>`
+    + `<span><i style="background:#eef2f0"></i>Livre</span>`
     + (Object.values(occ).some(e=>e.embalagem && e.embalagem!==p.embalagem) ? `<span><i style="background:linear-gradient(#83E28E 50%,#d9f4dc 50%)"></i>Caixinha 0,5 kg em posição de 1 kg</span>` : '');
   // camadas (profundidade)
   $('#vzCam').innerHTML = E.lados.slice().reverse().map(l=>`<button data-l="${l}" aria-pressed="${l===VZ.lado}">${esc(L.nomeLado(l))}</button>`).join('');

@@ -118,13 +118,24 @@
   const ladosPara = (embAmostra, pr) => (pr.embalagem === 'CX1' && embAmostra === 'CX05') ? EMBALAGENS.CX05.lados : EMBALAGENS[pr.embalagem].lados;
   const metadeLado = l => String(l || '').charAt(0);
   const ehSubLado = l => String(l || '').length === 2;
-  function conflitoMetade(est, slot, pr) {
-    if (!pr || pr.embalagem !== 'CX1') return '';
-    const sub = ehSubLado(slot.lado), m = metadeLado(slot.lado);
-    for (const e of Object.values(est)) {
-      const s = e.slot; if (!s || e.status !== 'ARQUIVO') continue;
-      if (Number(s.prateleira) !== Number(slot.prateleira) || s.andar !== slot.andar || s.linha !== slot.linha || metadeLado(s.lado) !== m) continue;
-      if (ehSubLado(s.lado) !== sub) return 'a metade ' + (m === 'T' ? 'Trás' : 'Frente') + ' desta linha já tem caixinha de ' + (sub ? '1 kg' : '0,5 kg') + ' (' + e.protocolo + '); 1 kg e 0,5 kg não se empilham juntas';
+  /* Ocupação por ESPAÇO de 0,5 kg (9 × 9 × 9 cm): na profundidade de cada metade cabem 2 espaços
+     (Trás 02 + Trás 01 · Frente 02 + Frente 01). A caixinha de 1 kg (Trás/Frente) ocupa os 2 espaços da metade;
+     a de 0,5 kg ocupa 1. Assim uma de 1 kg pode ir em cima de duas de 0,5 kg, e uma de 0,5 kg em cima de uma de 1 kg. */
+  const celulasLado = l => l === 'T' ? ['T2', 'T1'] : l === 'F' ? ['F2', 'F1'] : [l];
+  const chaveCel = (s, c, h) => [s.prateleira, s.andar, s.linha, c, h].join('-');
+  function celulasOcupadas(est) {
+    const m = {};
+    Object.values(est).forEach(e => { const s = e.slot; if (!s || e.status !== 'ARQUIVO') return; celulasLado(s.lado).forEach(c => { m[chaveCel(s, c, s.altura)] = e; }); });
+    return m;
+  }
+  // '' se a posição está livre e apoiada; senão o motivo
+  function checarEspaco(cel, slot, nomeAlt) {
+    const cs = celulasLado(slot.lado);
+    for (const c of cs) { const o = cel[chaveCel(slot, c, slot.altura)]; if (o) return 'Posição ocupada pela amostra ' + o.protocolo + '.'; }
+    if (slot.altura > 1) {
+      const falta = cs.filter(c => !cel[chaveCel(slot, c, slot.altura - 1)]);
+      if (falta.length) { let h = 1; while (h < slot.altura && !cs.every(c => !cel[chaveCel(slot, c, h)] && (h === 1 || cel[chaveCel(slot, c, h - 1)]))) h++;
+        return 'Não pode: ' + (cs.length > 1 && falta.length < cs.length ? 'falta apoio embaixo de metade da caixinha (' + nomeLado(falta[0]) + ' na altura ' + nomeAlt(slot.altura - 1) + ' está vazia)' : 'a posição abaixo (' + nomeAlt(slot.altura - 1) + ') está vazia') + '; a caixinha precisa ficar apoiada.' + (h < slot.altura ? ' Use a altura ' + nomeAlt(h) + ' desta pilha.' : ' Preencha primeiro o espaço vazio embaixo.'); }
     }
     return '';
   }
@@ -208,12 +219,12 @@
      Prioridade: andar já com o mesmo perfil (continua a sequência) → andar vazio (da própria embalagem primeiro). */
   function sugerirPosicao(amostra, embalagem, est, prateleiras, excetoProt) {
     const ests = Object.assign({}, est); if (excetoProt) delete ests[excetoProt];
-    const occ = ocupacao(ests), pp = perfisPrateleiras(ests, prateleiras);
+    const cel = celulasOcupadas(ests), pp = perfisPrateleiras(ests, prateleiras);
     // prateleiras da própria embalagem primeiro; a caixinha de 0,5 kg pode seguir depois para as de 1 kg
     const ativas = (prateleiras || []).filter(p => p.situacao !== 'Inativa' && cabeNa(embalagem, p.embalagem))
       .sort((a, b) => (a.embalagem === embalagem ? 0 : 1) - (b.embalagem === embalagem ? 0 : 1) || a.numero - b.numero);
     const livre = (pr, a) => { const emb = (pr.embalagem === 'CX1' && embalagem === 'CX05') ? 'CX05' : pr.embalagem;
-      for (const s of ordemSlots(pr.numero, emb, pr.linhas)) if (s.andar === a && !occ[chaveSlot(s)] && !conflitoMetade(ests, s, pr)) return s; return null; };
+      for (const s of ordemSlots(pr.numero, emb, pr.linhas)) if (s.andar === a && !checarEspaco(cel, s, h => nomeAltura(pr.embalagem, h))) return s; return null; };
     const obs = pr => pr.embalagem !== embalagem ? ' (caixinha de 0,5 kg na prateleira de 1 kg)' : '';
     const perfilAndar = (pr, a) => { const x = pp[pr.numero]; return x && x.andares[a] ? x.andares[a].perfil : null; };
     // 1º: andar que já tem o mesmo perfil (continua a sequência)
@@ -234,15 +245,7 @@
     const e = dimPrat(pr);
     if (!(slot.andar >= 1 && slot.andar <= ANDARES && slot.linha >= 1 && slot.linha <= e.linhas && ladosPara(embalagem, pr).indexOf(slot.lado) >= 0 && slot.altura >= 1 && slot.altura <= e.alturas)) return ['Posição fora da capacidade da prateleira.'];
     const ests = Object.assign({}, est); if (excetoProt) delete ests[excetoProt];
-    const ocup = ocupacao(ests)[chaveSlot(slot)];
-    if (ocup) return ['Posição ocupada pela amostra ' + ocup.protocolo + '.'];
-    const cm = conflitoMetade(ests, slot, pr); if (cm) return ['Não pode: ' + cm + '.'];
-    // apoio: da altura B para cima precisa haver caixinha/saco logo abaixo (nada fica "flutuando")
-    if (slot.altura > 1) {
-      const oc = ocupacao(ests), em = h => oc[chaveSlot(Object.assign({}, slot, { altura: h }))];
-      if (!em(slot.altura - 1)) { let h = 1; while (h < slot.altura && em(h)) h++;
-        return ['Não pode: a posição abaixo (' + nomeAltura(pr.embalagem, slot.altura - 1) + ') está vazia; a ' + (pr.embalagem === 'KRAFT' ? 'embalagem' : 'caixinha') + ' precisa ficar apoiada. Use a altura ' + nomeAltura(pr.embalagem, h) + ' desta pilha.']; }
-    }
+    const msg = checarEspaco(celulasOcupadas(ests), slot, h => nomeAltura(pr.embalagem, h)); if (msg) return [msg];
     const x = perfisPrateleiras(ests, prateleiras)[pr.numero], pa = x && x.andares[slot.andar] && x.andares[slot.andar].perfil;
     if (pa) { const m = motivosIncompat(perfil(amostra, pr.embalagem), pa); if (m.length) return m.map(t => 'Não pode: ' + t + '.'); }
     return [];
@@ -250,14 +253,15 @@
 
   /* Gravidade: depois de uma retirada, as caixinhas/sacos de cima descem e a pilha fica sem buracos.
      Recebe o estado JÁ com a retirada aplicada e um endereço da pilha; devolve quem muda de altura. */
-  const chavePilha = s => [s.prateleira, s.andar, s.linha, s.lado].join('-');
+  const chavePilha = s => [s.prateleira, s.andar, s.linha, String(s.lado).charAt(0)].join('-');
   function descerPilha(est, ref) {
     if (!ref || !ref.prateleira) return [];
     const k = chavePilha(ref);
     const pilha = Object.values(est).filter(e => e.slot && e.status === 'ARQUIVO' && chavePilha(e.slot) === k).sort((a, b) => a.slot.altura - b.slot.altura);
-    const out = [];
-    pilha.forEach((e, i) => { if (e.slot.altura !== i + 1) out.push({ e, de: e.slot, para: Object.assign({}, e.slot, { altura: i + 1 }) }); });
-    return out;
+    // cada caixinha desce enquanto TODOS os espaços logo abaixo dela estiverem vazios (de baixo para cima)
+    const alt = new Map(pilha.map(e => [e, e.slot.altura])), ocup = (c, h, eu) => pilha.some(o => o !== eu && alt.get(o) === h && celulasLado(o.slot.lado).includes(c));
+    pilha.forEach(e => { const cs = celulasLado(e.slot.lado); let h = alt.get(e); while (h > 1 && cs.every(c => !ocup(c, h - 1, e))) h--; alt.set(e, h); });
+    return pilha.filter(e => alt.get(e) !== e.slot.altura).map(e => ({ e, de: e.slot, para: Object.assign({}, e.slot, { altura: alt.get(e) }) }));
   }
 
   /* ---------- Etiqueta da linha ---------- */
@@ -476,10 +480,10 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.10.26l',
+    VERSAO_REGRAS: '2026.10.26m',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
-    EMBALAGENS, ANDARES, LINHAS_OPCOES, ladosPara, conflitoMetade, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
+    EMBALAGENS, ANDARES, LINHAS_OPCOES, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
     ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };

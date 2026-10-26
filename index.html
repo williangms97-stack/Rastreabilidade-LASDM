@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.26s"></script>
+<script src="regras.js?v=2026.10.26t"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.26s'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.26t'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -254,7 +254,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26s</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26t</div>
     </section>
   </main>
 
@@ -938,7 +938,7 @@ function novaPrateleira(embIni, depois){
   sheet(`<h2>Nova prateleira</h2><div class="small">Todas as prateleiras têm 4 andares. A capacidade depende da embalagem. Cada ANDAR assume o perfil da primeira amostra armazenada nele (cultura, tratamento, produtor e grupo de remessa).</div>
     <label class="f">Número<input type="number" id="npNum" min="1" value="${prox}"></label>
     <div><h3 style="margin-bottom:6px">Embalagem</h3><div class="seg" id="npEmb">${Object.entries(L.EMBALAGENS).map(([k,v])=>`<button data-emb="${k}" aria-pressed="${k===(embIni||'CX1')}">${v.nome}</button>`).join('')}</div></div>
-    <div id="npLinBox"><h3 style="margin-bottom:6px">Linhas por andar</h3><div class="seg" id="npLin"><button data-lin="15" aria-pressed="true">15 linhas</button><button data-lin="14" aria-pressed="false">14 linhas</button></div></div>
+    <div id="npLinBox"><h3 style="margin-bottom:6px">Linhas por andar</h3><div class="seg" id="npLin"><button data-lin="14" aria-pressed="false">14 linhas</button><button data-lin="15" aria-pressed="true">15 linhas</button></div></div>
     <div class="small" id="npCap"></div>
     <div class="row"><button class="btn ghost" id="npCancel">Cancelar</button><button class="btn" id="npOk">Cadastrar</button></div>`);
   let emb = embIni || 'CX1', lin = 15;
@@ -1181,7 +1181,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26s' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.26s' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.26t' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.26t' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

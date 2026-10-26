@@ -143,7 +143,7 @@
   const nomeEmb = k => (EMBALAGENS[k] || {}).nome || k || '—';
   const capLinha = k => { const e = EMBALAGENS[k]; return e ? e.lados.length * e.alturas : 0; };
   // linhas por andar: 15 por padrão nas caixinhas; algumas prateleiras só comportam 14 (definido no cadastro)
-  const LINHAS_OPCOES = { CX1: [15, 14], CX05: [15, 14] };
+  const LINHAS_OPCOES = { CX1: [14, 15], CX05: [14, 15] };
   const nLinhas = (k, lin) => { const e = EMBALAGENS[k]; return e ? (Number(lin) > 0 ? Number(lin) : e.linhas) : 0; };
   const dimPrat = pr => Object.assign({}, EMBALAGENS[pr.embalagem], { linhas: nLinhas(pr.embalagem, pr.linhas) });
   const capAndar = (k, lin) => nLinhas(k, lin) * capLinha(k);
@@ -488,7 +488,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.10.26s',
+    VERSAO_REGRAS: '2026.10.26t',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

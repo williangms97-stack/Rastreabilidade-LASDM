@@ -245,7 +245,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26e</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26f</div>
     </section>
   </main>
 
@@ -1092,6 +1092,8 @@ async function baixar(){
   // movimentos já enviados há mais de 2 dias saem da memória do aparelho (ficam na planilha)
   const corte = Date.now() - 2*86400000; db.mov = db.mov.filter(m=>!m.enviado || m.ts > corte || /^Conflito/.test(m.situacao||''));
   REMOTO = { movimentos:(j.movimentos||[]).filter(m=>m.id && m.protocolo).map(m=>Object.assign(m, { ts:Number(m.ts)||0 })), prateleiras:j.prateleiras||[], refInfo:j.refInfo||{}, em:Date.now() };
+  // a planilha é a referência: se ela corrigiu a posição de um movimento já enviado (ex.: migração da ordem da caixinha 0,5 kg), vale a dela
+  const rem = new Map(REMOTO.movimentos.map(m=>[m.id, m])); db.mov.forEach(m=>{ const r = rem.get(m.id); if(m.enviado && r && r.lado!==m.lado){ m.lado = r.lado; m.posicao = r.posicao; } });
   const pend = new Set(db.filaPrat.map(p=>p.id)); db.prateleiras = (db.prateleiras||[]).filter(p=>pend.has(p.id));
   save(); cachePut('remoto', REMOTO);
 }
@@ -1144,11 +1146,11 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26e';
+  const app = 'App versão 2026.10.26f';
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
-    el.innerHTML = app + ' · Script v' + v + (v < 4 ? ' <b style="color:#b42318">(desatualizado: implante a versão 4)</b>' : ''); }
+    el.innerHTML = app + ' · Script v' + v + (v < 5 ? ' <b style="color:#b42318">(desatualizado: implante a versão 5)</b>' : ''); }
   catch(e){ el.textContent = app + ' · Script: sem conexão'; }
 }
 async function iniciarLogin(){

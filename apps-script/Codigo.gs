@@ -5,7 +5,7 @@
  * Abas criadas sozinhas: Movimentos · Prateleiras · Referência · Usuários · Log de usuários
  * Fotos das etiquetas vão para a pasta "LASDM - Fotos das etiquetas" no Google Drive.
  */
-const VERSAO = 4;   // v4: ida para sala libera a posição (as caixinhas de cima descem: o app envia os remanejamentos) · v3: um protocolo (ou amostra manual M) só pode estar emblocado uma vez; Pureza é volume à parte   // v2: envio da referência em partes com posição fixa (pode repetir sem duplicar) e espera pela planilha ocupada
+const VERSAO = 5;   // v5: caixinha 0,5 kg passa a contar do corredor (Frente 01 = a da frente): registros antigos têm Trás/Frente 01↔02 trocados uma única vez · v4: ida para sala libera a posição (as caixinhas de cima descem: o app envia os remanejamentos) · v3: um protocolo (ou amostra manual M) só pode estar emblocado uma vez; Pureza é volume à parte   // v2: envio da referência em partes com posição fixa (pode repetir sem duplicar) e espera pela planilha ocupada
 const ABA_MOV = 'Movimentos', ABA_PRAT = 'Prateleiras', ABA_REF = 'Referência', ABA_USR = 'Usuários', ABA_LOGUSR = 'Log de usuários';
 const CAB_MOV = ['ID', 'Data', 'Hora', 'Protocolo', 'Ação', 'Destino', 'Prateleira', 'Andar', 'Linha', 'Lado', 'Altura', 'Posição',
   'Embalagem', 'Classificação', 'Espécie', 'Cultivar', 'Lote/Origem', 'Produtor', 'Tipo de análise', 'Tipo de remessa', 'Tratamento', 'Categoria',
@@ -148,11 +148,36 @@ function ocupadas_(movs) {
   return occ;
 }
 
+/* Migração única (v5): na prateleira de 0,5 kg a numeração da profundidade inverteu (Frente 01 = a da frente,
+   Trás 02 = a do fundo). Os registros feitos antes da mudança têm 01↔02 trocados para continuar no mesmo lugar físico. */
+const CORTE_LADO05 = 1793027700000; // 26/10/2026 12:15 (Brasília): publicação da nova ordem
+function migrarLados05_(jaTemLock) {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('MIGR_LADO05') === '1') return;
+  const lock = LockService.getScriptLock();
+  if (!jaTemLock && !lock.tryLock(20000)) return;
+  try {
+    if (props.getProperty('MIGR_LADO05') === '1') return;
+    const { sh, vals } = lerMovimentos_();
+    const troca = { T1: 'T2', T2: 'T1', F1: 'F2', F2: 'F1' }, nomes = { 'Trás 01': 'Trás 02', 'Trás 02': 'Trás 01', 'Frente 01': 'Frente 02', 'Frente 02': 'Frente 01' };
+    let n = 0;
+    vals.forEach((v, i) => {
+      const lado = String(v[9]), ts = Number(v[27]) || 0;
+      if (!troca[lado] || !ts || ts >= CORTE_LADO05) return;
+      sh.getRange(i + 2, 10).setValue(troca[lado]);
+      sh.getRange(i + 2, 12).setValue(String(v[11]).replace(/Trás 0[12]|Frente 0[12]/, x => nomes[x]));
+      n++;
+    });
+    props.setProperty('MIGR_LADO05', '1'); props.setProperty('MIGR_LADO05_N', String(n));
+  } finally { if (!jaTemLock) lock.releaseLock(); }
+}
+
 /* ================== GET ==================
    ?acao=dados&desde=TS  → movimentos (todos os que ainda definem a posição + os recentes), prateleiras
    ?acao=ref&desde=AAAA-MM-DD → referência recebida a partir da data · ?acao=ref&prot=17215/2026 → uma amostra */
 function doGet(e) {
   const p = (e && e.parameter) || {};
+  migrarLados05_(false);
   if (p.acao === 'dados') {
     const desde = Number(p.desde || 0);
     const { vals } = lerMovimentos_();
@@ -188,6 +213,7 @@ function doPost(e) {
   if (!lock.tryLock(30000)) return resposta_({ ok: false, erro: 'Planilha ocupada no momento. Tente de novo em alguns segundos.', ocupada: true });
   try {
     const d = JSON.parse(e.postData.contents || '{}');
+    migrarLados05_(true);
     if (d.acao && d.acao !== 'ref') { const r = usuarios_(d); if (r) return resposta_(r); }
     if (d.acao === 'ref') return resposta_(referencia_(d));
     const props = PropertiesService.getScriptProperties();

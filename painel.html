@@ -246,11 +246,11 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26e';
+  const app = 'App versão 2026.10.26f';
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
-    el.innerHTML = app + ' · Script v' + v + (v < 4 ? ' <b style="color:#b42318">(desatualizado: implante a versão 4)</b>' : ''); }
+    el.innerHTML = app + ' · Script v' + v + (v < 5 ? ' <b style="color:#b42318">(desatualizado: implante a versão 5)</b>' : ''); }
   catch(e){ el.textContent = app + ' · Script: sem conexão'; }
 }
 mostrarVersao(URL);

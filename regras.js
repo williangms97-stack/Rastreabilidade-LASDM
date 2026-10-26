@@ -268,6 +268,69 @@
     }
     return out;
   }
+  /* Planilha MANUAL ("TESTES - ENTRADAS MANUAIS"): uma aba por espécie, cabeçalho "Protocolo LASDM".
+     Os protocolos viram "M<n>/<ano>". Abas ignoradas: experimento (numeração própria), cópias e etiquetas.
+     Recebe [{ nome, linhas }] (todas as abas). Devolve { linhas, avisos }. */
+  const COLS_MAN = {
+    'PROTOCOLO LASDM': 'prot', 'DATA PROT. LASDM': 'data', 'TIPO DE REMESSA': 'remessa', 'SOLICITANTE': 'produtor', 'TESTES SOLICITADOS': 'abertas',
+    'ESPECIE': 'especie', 'SAFRA': 'safra', 'CULTIVAR': 'cultivar', 'HIBRIDO': 'cultivar', 'LOTE': 'lote', 'LOTE/PRE-LOTE': 'lote', 'CATEGORIA': 'categoria',
+    'PENEIRA': 'peneira', 'REPRESENTATIVIDADE': 'repres', 'PESO LOTE (KG)': 'repres', 'OBSERVACAO': 'obs', 'OBS': 'obs'
+  };
+  function especieManual(v, aba) {
+    const t = up(v) + ' ' + up(aba);
+    return /SOJA/.test(t) ? 'SOJA' : /MILHO|ZEA/.test(t) ? 'MILHO' : /TRIGO|TRITICUM/.test(t) ? 'TRIGO' : /FEIJ/.test(t) ? 'FEIJÃO' : up(v);
+  }
+  function remessaManual(v) {
+    const t = up(v).replace(/\s*-\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!t || t === '-') return '';
+    if (/^PRE ?LOTE/.test(t)) return 'PRE LOTE';
+    if (/^LOTE/.test(t)) return 'LOTE';
+    if (/^TESTE/.test(t)) return 'TESTE';
+    if (/^ENTRADA/.test(t)) return 'ENTRADA SEMENTE';
+    if (/^DEVOLU/.test(t)) return 'DEVOLUÇÕES';
+    if (/^REVALIDA/.test(t)) return 'REVALIDAÇÃO';
+    if (/^REEMBALA/.test(t)) return 'REEMBALAGEM';
+    return t;
+  }
+  const ehPlanilhaManual = abas => abas.some(a => (a.linhas || []).some(r => (r || []).some(c => up(c) === 'PROTOCOLO LASDM')));
+  function lerPlanilhaManual(abas) {
+    const avisos = [], porProt = {}, ignoradas = [];
+    abas.forEach(({ nome, linhas }) => {
+      const N = up(nome);
+      if (/EXPERIMENTO|^PLANILHA\d|ETIQUETA|SEQUENCIAL/.test(N)) { if (!/SEQUENCIAL/.test(N)) ignoradas.push(nome); return; }
+      const hi = (linhas || []).findIndex(r => (r || []).some(c => up(c) === 'PROTOCOLO LASDM'));
+      if (hi < 0) return;
+      const cab = linhas[hi].map(c => COLS_MAN[up(c)] || null);
+      for (let i = hi + 1; i < linhas.length; i++) {
+        const r = linhas[i] || [], o = { origem: 'Manual', aba: nome };
+        cab.forEach((k, j) => { if (!k || o[k]) return; let v = r[j]; v = v == null ? '' : String(v).trim(); if (v === '-' || v === '-o-') v = ''; o[k] = v; });
+        const n = normProt(o.prot); if (!n) continue;
+        o.prot = 'M' + protBase(n).replace(/^M/i, '');
+        o.especie = especieManual(o.especie, nome);
+        o.remessa = remessaManual(o.remessa);
+        if (/INOVA/.test(N)) o.produtor = 'INOVA GENÉTICA';
+        (porProt[o.prot] = porProt[o.prot] || []).push(o);
+      }
+    });
+    // aba SEQUENCIAL: só completa protocolos que não estão nas abas de espécie
+    const seq = abas.find(a => /SEQUENCIAL/.test(up(a.nome)));
+    if (seq) { const hi = seq.linhas.findIndex(r => up((r || [])[0]) === 'PROTOCOLO');
+      if (hi >= 0) for (let i = hi + 1; i < seq.linhas.length; i++) { const r = seq.linhas[i] || [], n = normProt(r[0]); if (!n) continue; const pm = 'M' + protBase(n);
+        if (!porProt[pm]) porProt[pm] = [{ origem: 'Manual', aba: seq.nome, prot: pm, especie: especieManual(r[1], ''), produtor: /INOVA/.test(up(r[1])) ? 'INOVA GENÉTICA' : String(r[2] || '').trim(), remessa: '', cultivar: '' }]; } }
+    const linhasOut = [];
+    Object.keys(porProt).forEach(k => {
+      const v = porProt[k];
+      if (v.length === 1) { linhasOut.push(v[0]); return; }
+      // mesmo número em abas diferentes: junta os dados e marca para conferência
+      const o = Object.assign({}, v[0]);
+      ['especie', 'cultivar', 'lote', 'remessa', 'produtor', 'data'].forEach(c => { const vs = [...new Set(v.map(x => x[c]).filter(Boolean))]; o[c] = vs.join(' / '); });
+      o.obs = 'NÚMERO REPETIDO na planilha manual: abas ' + v.map(x => x.aba).join(' e ');
+      o.aba = v.map(x => x.aba).join(' + ');
+      linhasOut.push(o); avisos.push(k.replace(/^M/, 'M ') + ' (' + v.map(x => x.aba.replace(/^ESP[EÉ]CIE - |^H[IÍ]BRIDO - /i, '')).join(' e ') + ')');
+    });
+    linhasOut.sort((a, b) => protAno(a.prot) - protAno(b.prot) || protNum(a.prot) - protNum(b.prot));
+    return { linhas: linhasOut, avisos, ignoradas };
+  }
   // une referências: a mais nova (ou a manual) sobrescreve a anterior do mesmo protocolo
   function unirRef(listas) {
     const m = {};
@@ -370,6 +433,7 @@
 
   G.LASDM = {
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, motivosIncompat,
+    lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
     ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR

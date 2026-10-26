@@ -202,7 +202,7 @@ tbody tr:hover{background:#f7fbf9}
       <div class="alert ok" id="refStatus">—</div>
       <div class="fbar">
         <label>Planilha do sistema<input type="file" id="fSis" accept=".xls,.xlsx,.csv"></label>
-        <label>Planilha manual<input type="file" id="fMan" accept=".xls,.xlsx,.csv"></label>
+        <label>Planilha manual (Testes - Entradas manuais)<input type="file" id="fMan" accept=".xls,.xlsx,.csv"></label>
       </div>
       <div class="fbar"><label>Usuário administrador<input type="text" id="admU" autocomplete="username" autocapitalize="none"></label><label>Senha<input type="password" id="admS" autocomplete="current-password"></label>
         <button class="btn" id="btnEnviarRef">Ler e enviar</button></div>
@@ -246,7 +246,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26c';
+  const app = 'App versão 2026.10.26d';
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -466,10 +466,11 @@ async function lerArquivo(f, origem){
   if(!window.XLSX) await carregarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
   const buf = await f.arrayBuffer();
   const wb = XLSX.read(buf, { type:'array', cellDates:true });
-  const sh = wb.Sheets[wb.SheetNames[0]];
   // datas como dd/mm/aaaa (as colunas do sistema vêm como texto; se vierem como data do Excel, converte)
-  const linhas = XLSX.utils.sheet_to_json(sh, { header:1, raw:true, defval:'' }).map(r=>r.map(v=> v instanceof Date ? `${pad(v.getDate())}/${pad(v.getMonth()+1)}/${v.getFullYear()}` : String(v)));
-  return L.lerPlanilhaRef(linhas, origem);
+  const abas = wb.SheetNames.map(nome => ({ nome, linhas: XLSX.utils.sheet_to_json(wb.Sheets[nome], { header:1, raw:true, defval:'' }).map(r=>r.map(v=> v instanceof Date ? `${pad(v.getDate())}/${pad(v.getMonth()+1)}/${v.getFullYear()}` : String(v))) }));
+  // reconhece o tipo pelo conteúdo (não importa em qual campo o arquivo foi escolhido)
+  if(L.ehPlanilhaManual(abas)){ const r = L.lerPlanilhaManual(abas); r.linhas.tipo = 'Manual'; r.linhas.avisos = r.avisos; r.linhas.ignoradas = r.ignoradas; return r.linhas; }
+  const l = L.lerPlanilhaRef(abas[0].linhas, 'Sistema'); l.tipo = 'Sistema'; return l;
 }
 const prog = p => { $('#prog').hidden = false; $('#prog i').style.width = Math.round(p*100)+'%'; };
 $('#btnEnviarRef').onclick = async () => {
@@ -480,7 +481,9 @@ $('#btnEnviarRef').onclick = async () => {
   const btn = $('#btnEnviarRef'); btn.disabled = true;
   try{
     $('#refMsg').innerHTML = '<div class="sub">Lendo as planilhas…</div>'; prog(0.02);
-    const sis = fs ? await lerArquivo(fs, 'Sistema') : [], man = fm ? await lerArquivo(fm, 'Manual') : [];
+    const lidas = []; if(fs) lidas.push(await lerArquivo(fs)); if(fm) lidas.push(await lerArquivo(fm));
+    const sis = lidas.filter(x=>x.tipo==='Sistema').flat(), manL = lidas.filter(x=>x.tipo==='Manual'), man = manL.flat();
+    const avisosMan = manL.flatMap(x=>x.avisos||[]), ignoradas = [...new Set(manL.flatMap(x=>x.ignoradas||[]))];
     $('#refMsg').innerHTML = '<div class="sub">Baixando a referência atual para unir…</div>'; prog(0.08);
     const atual = (await get('?acao=ref')).ref || [];
     const todas = L.unirRef([atual, sis, man]);
@@ -494,13 +497,15 @@ $('#btnEnviarRef').onclick = async () => {
       await comNovaTentativa(()=>post({ acao:'ref', op:'parte', admin, ini:i, linhas:parte }), (n, ms)=>{ $('#refMsg').innerHTML = `<div class="sub">Planilha ocupada; tentando de novo esta parte (${n}ª tentativa) em ${ms/1000} s…</div>`; });
       enviadas += parte.length; prog(0.1 + 0.88*enviadas/todas.length); $('#refMsg').innerHTML = `<div class="sub">Enviando… ${enviadas} de ${todas.length}</div>`;
     }
-    const resumo = [fs?`sistema ${sis.length}`:'', fm?`manual ${man.length}`:''].filter(Boolean).join(', ');
+    const resumo = [sis.length?`sistema ${sis.length}`:'', man.length?`manual ${man.length}`:''].filter(Boolean).join(', ');
     const j = await comNovaTentativa(()=>post({ acao:'ref', op:'fim', admin, resumo, total:todas.length }));
     if(ver < 2) $('#refPrev').innerHTML = '<div class="alert warn">O script da planilha está na versão 1. Atualize para a versão 2 (Implantar → Gerenciar implantações → ✏️ → Nova versão) para o envio ficar à prova de falhas.</div>';
     prog(1);
     const esp = {}; todas.forEach(r=>{ esp[r.especie] = (esp[r.especie]||0)+1; });
     $('#refMsg').innerHTML = `<div class="alert ok">Planilhas enviadas: ${j.linhas} amostras de referência (${resumo}; ${novas>=0?novas+' novas':''}). Os celulares baixam a atualização na próxima sincronização.</div>`;
     $('#refPrev').innerHTML += `<div class="sub">Por espécie: ${Object.entries(esp).map(([k,v])=>esc(k)+' '+v).join(' · ')}</div>`;
+    if(man.length) $('#refPrev').innerHTML += `<div class="sub">Planilha manual: ${man.length} protocolos M (abas de espécie)${ignoradas.length?'; abas não usadas: '+esc(ignoradas.join(', '))+' (numeração própria ou cópia)':''}.</div>`;
+    if(avisosMan.length) $('#refPrev').innerHTML += `<div class="alert warn"><b>${avisosMan.length} números repetidos na planilha manual</b> (o mesmo protocolo M em duas abas, com amostras diferentes). Ficaram marcados para conferência — corrija a numeração na planilha: ${esc(avisosMan.slice(0,12).join(' · '))}${avisosMan.length>12?' …':''}</div>`;
     $('#admS').value = ''; enviandoRef = false; carregar();
   }catch(err){ $('#refMsg').innerHTML = `<div class="alert bad">${esc(err.message||err)} Nada foi perdido: clique em "Ler e enviar" de novo.</div>`; }
   finally{ btn.disabled = false; enviandoRef = false; }

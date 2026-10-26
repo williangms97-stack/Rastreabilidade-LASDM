@@ -245,7 +245,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26c</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26d</div>
     </section>
   </main>
 
@@ -662,28 +662,30 @@ async function abrirAmostra(prot, ctx={}){
   pauseCam();
   aguarde('Abrindo a amostra…');
   const pureza = L.ehPureza(prot), manual = L.ehManual(prot);
-  const cf = manual ? { prot, ref:null } : await conferirProtocolo(L.protBase(prot), ctx.lido, ctx.escolhido);
+  // manual: a planilha manual (protocolos M) serve só de auditoria e para completar a cultivar, que não vem na etiqueta
+  const cf = manual ? { prot, ref: await buscarRef(L.protBase(prot)) } : await conferirProtocolo(L.protBase(prot), ctx.lido, ctx.escolhido);
   cf.prot = L.chaveItem(cf.prot, pureza);
   ctx.opcoes = cf.opcoes || cf.outros || null; ctx.lidoProt = ctx.lidoProt || (ctx.lido && ctx.lido.prot);
   if(cf.corrigido){ prot = cf.prot; ctx.corrigido = cf.corrigido; if(ctx.codigo){ db.vinculos[ctx.codigo] = prot; save(); } }
   else prot = cf.prot;
-  const ref = cf.ref;
+  const ref = cf.ref, refDup = ref && /^N[ÚU]MERO REPETIDO/i.test(ref.obs||'');
   recompute();
   const e = EST[prot];
   aguarde('');
   // dados: registro anterior desta amostra > etiqueta (OCR) > planilha (se houver, só como sugestão) > escolha anterior do operador
   const ePai = pureza ? EST[L.protBase(prot)] : null;
+  const ref0 = refDup ? null : ref;   // número repetido na planilha manual: não preenche nada com ela, só avisa
   const lido = ctx.lido || {}, base = e && e.especie ? e : (ePai && ePai.especie ? ePai : null), tipoOk = t => L.TIPOS_REMESSA.find(x=>L.up(x)===L.up(t)) || '';
   const a = { protocolo:prot };
-  a.cultivar = (base && base.cultivar) || lido.cultivar || (ref && ref.cultivar) || '';
-  a.remessa = (base && base.remessa) || tipoOk(lido.remessa) || (ref && tipoOk(ref.remessa)) || '';
-  a.especie = (base && base.especie) || lido.especie || (ref && ref.especie) || L.inferirEspecie(a.cultivar) || db.ultEspecie || 'SOJA';
-  a.tratamento = base ? (base.tratamento||'') : ref ? (ref.tratamento||'') : '';
-  a.produtor = (base && base.produtor) || (ref && ref.produtor) || '';
-  a.tipoAnalise = (base && base.tipoAnalise) || (ref && ref.tipoAnalise) || 'ANÁLISE PRÉVIA(CQI)';
-  a.lote = (base && base.lote) || (ref && ref.lote) || '';
-  a.categoria = (base && base.categoria) || (ref && ref.categoria) || '';
-  if(ref && ref.data) a.dataReceb = ref.data;
+  a.cultivar = (base && base.cultivar) || lido.cultivar || (ref0 && ref0.cultivar) || '';
+  a.remessa = (base && base.remessa) || tipoOk(lido.remessa) || (ref0 && tipoOk(ref0.remessa)) || '';
+  a.especie = (base && base.especie) || lido.especie || (ref0 && ref0.especie) || L.inferirEspecie(a.cultivar) || db.ultEspecie || 'SOJA';
+  a.tratamento = base ? (base.tratamento||'') : ref0 ? (ref0.tratamento||'') : '';
+  a.produtor = (base && base.produtor) || (ref0 && ref0.produtor) || '';
+  a.tipoAnalise = (base && base.tipoAnalise) || (ref0 && ref0.tipoAnalise) || 'ANÁLISE PRÉVIA(CQI)';
+  a.lote = (base && base.lote) || (ref0 && ref0.lote) || '';
+  a.categoria = (base && base.categoria) || (ref0 && ref0.categoria) || '';
+  if(ref0 && ref.data) a.dataReceb = ref0.data;
   const ctxA = { prot, ref, e, ctx, a, emb: pureza ? 'KRAFT' : (e && e.embalagem) || db.embPadrao || 'CX1', editar: !base };
   telaAmostra(ctxA);
 }
@@ -757,8 +759,9 @@ function telaAmostra(c){
     const el = $('#amAudit'); if(!el) return;
     if(!ref){ el.innerHTML = '<div class="small">Planilhas de referência: amostra ainda não consta nelas (ou não foram enviadas). O registro vale assim mesmo; a conferência fica para o painel.</div>'; return; }
     const au = auditar(a, ref), dif = au.filter(x=>!x.ok);
-    el.innerHTML = dif.length ? `<div class="alert warn"><b>Auditoria:</b> difere da planilha ${esc(ref.origem||'')} em ${dif.map(x=>`<b>${esc(x.campo)}</b> (planilha: ${esc(x.ref||'—')})`).join(', ')}. Confira a etiqueta; o registro segue com o que você informou.</div>`
-      : `<div class="small" style="color:var(--ok)">✓ Auditoria: confere com a planilha ${esc(ref.origem||'')}.</div>`;
+    const rep = /^N[ÚU]MERO REPETIDO/i.test(ref.obs||'') ? `<div class="alert warn"><b>Atenção:</b> ${esc(ref.obs)} (${esc(ref.especie||'')}). Confirme qual é esta amostra.</div>` : '';
+    el.innerHTML = rep + (dif.length ? `<div class="alert warn"><b>Auditoria:</b> difere da planilha ${esc(ref.origem||'')} em ${dif.map(x=>`<b>${esc(x.campo)}</b> (planilha: ${esc(x.ref||'—')})`).join(', ')}. Confira a etiqueta; o registro segue com o que você informou.</div>`
+      : `<div class="small" style="color:var(--ok)">✓ Auditoria: confere com a planilha ${esc(ref.origem||'')}.</div>`);
   };
   if(c.editar){
     const segVal = id => { const b = $('#'+id).querySelector('[aria-pressed=true]'); return b ? b.dataset.v : ''; };
@@ -1141,7 +1144,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26c';
+  const app = 'App versão 2026.10.26d';
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

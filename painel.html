@@ -7,9 +7,9 @@
 <title>Painel LASDM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<script src="regras.js?v=2026.10.26q"></script>
+<script src="regras.js?v=2026.10.26r"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.26q'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.26r'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -109,7 +109,7 @@ tbody tr:hover{background:#f7fbf9}
 .m2d .gr i.meia{background-image:linear-gradient(transparent 50%,rgba(255,255,255,.65) 50%)}
 .m2d .eixo{display:grid;grid-template-columns:44px minmax(0,1fr);gap:6px;font-size:11px;color:var(--muted)}
 .m2d .eixo div{display:grid;padding:0 3px}
-.m2d .eixo span{text-align:center}
+.m2d .eixo span{text-align:center;font-size:10.5px;white-space:nowrap;overflow:hidden}.m2d .eixo .lp{font-style:normal}@media (max-width:700px){.m2d .eixo .lp{display:none}}
 .leg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--ink-2)}
 .leg span{display:inline-flex;align-items:center;gap:5px}
 .leg i{width:12px;height:12px;border-radius:3px;display:inline-block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
@@ -279,7 +279,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26q' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.26q' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.26r' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.26r' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -381,7 +381,7 @@ function render(){
   renderSalas();
   renderMovimentos();
   renderRefStatus();
-  $('#rodape').textContent = `Painel versão 2026.10.26q · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
+  $('#rodape').textContent = `Painel versão 2026.10.26r · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -608,7 +608,7 @@ function renderViz(){
     const alt = E.alturas>10 ? 'min-height:3px' : '';
     h += `<div class="an"><b>A.${L.p2(a)}</b><div class="gr" style="grid-template-columns:repeat(${E.linhas},minmax(0,1fr));grid-auto-rows:${E.alturas>10?'3px':'14px'};gap:${E.alturas>10?'1px 2px':'2px'}">${cel}</div></div>`;
   }
-  h += `<div class="eixo"><span></span><div style="grid-template-columns:repeat(${E.linhas},minmax(0,1fr))">${Array.from({length:E.linhas},(_,i)=>`<span>${E.linhas>8 && i%2 ? '' : 'L.'+L.p2(i+1)}</span>`).join('')}</div></div>`;
+  h += `<div class="eixo"><span></span><div style="grid-template-columns:repeat(${E.linhas},minmax(0,1fr))">${Array.from({length:E.linhas},(_,i)=>`<span><i class="lp">L.</i>${L.p2(i+1)}</span>`).join('')}</div></div>`;
   $('#vz2d').innerHTML = h;
   // seletor de linha: L.01 até a última linha da prateleira (7 no kraft, 14 ou 15 nas caixinhas); a caixinha selecionada já preenche andar e linha
   { const vl = +$('#impLin').value || 1; $('#impLin').innerHTML = Array.from({length:E.linhas},(_,i)=>`<option value="${i+1}">Linha ${L.p2(i+1)}</option>`).join(''); $('#impLin').value = Math.min(vl, E.linhas);

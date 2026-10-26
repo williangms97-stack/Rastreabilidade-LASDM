@@ -110,8 +110,12 @@
   const nomeEmbAceitas = e => e === 'CX05' ? 'Caixinha 0,5 kg ou 1 kg' : nomeEmb(e);
   const nomeEmb = k => (EMBALAGENS[k] || {}).nome || k || '—';
   const capLinha = k => { const e = EMBALAGENS[k]; return e ? e.lados.length * e.alturas : 0; };
-  const capAndar = k => { const e = EMBALAGENS[k]; return e ? e.linhas * capLinha(k) : 0; };
-  const capPrateleira = k => capAndar(k) * ANDARES;
+  // linhas por andar: 15 por padrão nas caixinhas; algumas prateleiras só comportam 14 (definido no cadastro)
+  const LINHAS_OPCOES = { CX1: [15, 14], CX05: [15, 14] };
+  const nLinhas = (k, lin) => { const e = EMBALAGENS[k]; return e ? (Number(lin) > 0 ? Number(lin) : e.linhas) : 0; };
+  const dimPrat = pr => Object.assign({}, EMBALAGENS[pr.embalagem], { linhas: nLinhas(pr.embalagem, pr.linhas) });
+  const capAndar = (k, lin) => nLinhas(k, lin) * capLinha(k);
+  const capPrateleira = (k, lin) => capAndar(k, lin) * ANDARES;
   const nomeLado = l => ({ T: 'Trás', F: 'Frente', T1: 'Trás 01', T2: 'Trás 02', F1: 'Frente 01', F2: 'Frente 02' })[l] || l;
   const nomeAltura = (k, h) => (EMBALAGENS[k] && EMBALAGENS[k].letras) ? String.fromCharCode(64 + h) : String(h).padStart(2, '0');
   const p2 = n => String(n).padStart(2, '0');
@@ -121,9 +125,9 @@
     return 'P.' + p2(s.prateleira) + ' | A.' + p2(s.andar) + ' | L.' + p2(s.linha) + ' · ' + nomeLado(s.lado) + ' · ' + nomeAltura(emb, s.altura);
   }
   // ordem de preenchimento: andar 1→4, linha 1→N, do fundo para a frente (Trás antes da Frente), de baixo para cima
-  function* ordemSlots(prateleira, emb) {
-    const e = EMBALAGENS[emb]; if (!e) return;
-    for (let a = 1; a <= ANDARES; a++) for (let l = 1; l <= e.linhas; l++) for (const lado of e.lados) for (let h = 1; h <= e.alturas; h++)
+  function* ordemSlots(prateleira, emb, lin) {
+    const e = EMBALAGENS[emb]; if (!e) return; const nl = nLinhas(emb, lin);
+    for (let a = 1; a <= ANDARES; a++) for (let l = 1; l <= nl; l++) for (const lado of e.lados) for (let h = 1; h <= e.alturas; h++)
       yield { prateleira: prateleira, andar: a, linha: l, lado: lado, altura: h };
   }
 
@@ -177,7 +181,7 @@
     // prateleiras da própria embalagem primeiro; a caixinha de 0,5 kg pode seguir depois para as de 1 kg
     const ativas = (prateleiras || []).filter(p => p.situacao !== 'Inativa' && cabeNa(embalagem, p.embalagem))
       .sort((a, b) => (a.embalagem === embalagem ? 0 : 1) - (b.embalagem === embalagem ? 0 : 1) || a.numero - b.numero);
-    const livre = pr => { for (const s of ordemSlots(pr.numero, pr.embalagem)) if (!occ[chaveSlot(s)]) return s; return null; };
+    const livre = pr => { for (const s of ordemSlots(pr.numero, pr.embalagem, pr.linhas)) if (!occ[chaveSlot(s)]) return s; return null; };
     const obs = pr => pr.embalagem !== embalagem ? ' (caixinha de 0,5 kg na prateleira de 1 kg)' : '';
     for (const pr of ativas) { const x = pp[pr.numero]; if (x && x.perfil && chavePerfil(x.perfil) === chavePerfil(perfil(amostra, pr.embalagem))) { const s = livre(pr); if (s) return { slot: s, embPrat: pr.embalagem, motivo: 'Continua a sequência da prateleira ' + p2(pr.numero) + obs(pr) }; } }
     for (const pr of ativas) { const x = pp[pr.numero]; if (!x || !x.perfil) { const s = livre(pr); if (s) return { slot: s, embPrat: pr.embalagem, motivo: 'Prateleira ' + p2(pr.numero) + ' livre (passa a ser deste perfil)' + obs(pr) }; } }
@@ -190,7 +194,7 @@
     if (!pr) return ['Prateleira ' + slot.prateleira + ' não cadastrada.'];
     if (pr.situacao === 'Inativa') return ['Prateleira ' + p2(pr.numero) + ' está inativa.'];
     if (!cabeNa(embalagem, pr.embalagem)) return ['A prateleira ' + p2(pr.numero) + ' é de ' + nomeEmb(pr.embalagem) + '.'];
-    const e = EMBALAGENS[pr.embalagem];
+    const e = dimPrat(pr);
     if (!(slot.andar >= 1 && slot.andar <= ANDARES && slot.linha >= 1 && slot.linha <= e.linhas && e.lados.indexOf(slot.lado) >= 0 && slot.altura >= 1 && slot.altura <= e.alturas)) return ['Posição fora da capacidade da prateleira.'];
     const ests = Object.assign({}, est); if (excetoProt) delete ests[excetoProt];
     const ocup = ocupacao(ests)[chaveSlot(slot)];
@@ -436,7 +440,7 @@
   G.LASDM = {
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
-    EMBALAGENS, ANDARES, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
+    EMBALAGENS, ANDARES, LINHAS_OPCOES, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
     ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };

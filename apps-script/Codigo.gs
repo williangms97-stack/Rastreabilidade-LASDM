@@ -5,12 +5,12 @@
  * Abas criadas sozinhas: Movimentos · Prateleiras · Referência · Usuários · Log de usuários
  * Fotos das etiquetas vão para a pasta "LASDM - Fotos das etiquetas" no Google Drive.
  */
-const VERSAO = 5;   // v5: caixinha 0,5 kg passa a contar do corredor (Frente 01 = a da frente): registros antigos têm Trás/Frente 01↔02 trocados uma única vez · v4: ida para sala libera a posição (as caixinhas de cima descem: o app envia os remanejamentos) · v3: um protocolo (ou amostra manual M) só pode estar emblocado uma vez; Pureza é volume à parte   // v2: envio da referência em partes com posição fixa (pode repetir sem duplicar) e espera pela planilha ocupada
+const VERSAO = 6;   // v6: nº de linhas por prateleira (14 ou 15) · v5: caixinha 0,5 kg passa a contar do corredor (Frente 01 = a da frente): registros antigos têm Trás/Frente 01↔02 trocados uma única vez · v4: ida para sala libera a posição (as caixinhas de cima descem: o app envia os remanejamentos) · v3: um protocolo (ou amostra manual M) só pode estar emblocado uma vez; Pureza é volume à parte   // v2: envio da referência em partes com posição fixa (pode repetir sem duplicar) e espera pela planilha ocupada
 const ABA_MOV = 'Movimentos', ABA_PRAT = 'Prateleiras', ABA_REF = 'Referência', ABA_USR = 'Usuários', ABA_LOGUSR = 'Log de usuários';
 const CAB_MOV = ['ID', 'Data', 'Hora', 'Protocolo', 'Ação', 'Destino', 'Prateleira', 'Andar', 'Linha', 'Lado', 'Altura', 'Posição',
   'Embalagem', 'Classificação', 'Espécie', 'Cultivar', 'Lote/Origem', 'Produtor', 'Tipo de análise', 'Tipo de remessa', 'Tratamento', 'Categoria',
   'Validação', 'Lido na etiqueta', 'Usuário', 'Aparelho', 'Foto', 'TS', 'Situação', 'Recebido em', 'Obs'];
-const CAB_PRAT = ['ID', 'Número', 'Embalagem', 'Situação', 'Obs', 'Atualizado em', 'Atualizado por'];
+const CAB_PRAT = ['ID', 'Número', 'Embalagem', 'Situação', 'Obs', 'Atualizado em', 'Atualizado por', 'Linhas'];
 const CAB_REF = ['Protocolo', 'Data do recebimento', 'Espécie', 'Cultivar', 'Categoria', 'Peneira', 'Lote/Origem', 'Produtor', 'Tipo de análise',
   'Tipo de remessa', 'Tratamento', 'Safra', 'Representatividade', 'Análises abertas', 'Observação', 'Procedência', 'Planilha de origem', 'Data (AAAA-MM-DD)'];
 const CAMPOS_REF = ['prot', 'data', 'especie', 'cultivar', 'categoria', 'peneira', 'lote', 'produtor', 'tipoAnalise', 'remessa', 'tratamento', 'safra', 'repres', 'abertas', 'obs', 'procedencia', 'origem'];
@@ -188,7 +188,7 @@ function doGet(e) {
     const manter = {}; Object.keys(ultimo).forEach(k => { manter[ultimo[k].id] = 1; }); Object.keys(ultArm).forEach(k => { manter[ultArm[k].id] = 1; });
     const movimentos = todos.filter(m => manter[m.id] || !desde || m.ts >= desde);
     const shp = abaCom_(ABA_PRAT, CAB_PRAT), np = shp.getLastRow();
-    const prateleiras = np > 1 ? shp.getRange(2, 1, np - 1, CAB_PRAT.length).getValues().filter(v => v[0]).map(v => ({ id: String(v[0]), numero: Number(v[1]), embalagem: String(v[2]), situacao: String(v[3] || 'Ativa'), obs: String(v[4] || '') })) : [];
+    const prateleiras = np > 1 ? shp.getRange(2, 1, np - 1, CAB_PRAT.length).getValues().filter(v => v[0]).map(v => ({ id: String(v[0]), numero: Number(v[1]), embalagem: String(v[2]), situacao: String(v[3] || 'Ativa'), obs: String(v[4] || ''), linhas: Number(v[7]) || '' })) : [];
     const props = PropertiesService.getScriptProperties();
     const shr = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ABA_REF);
     return resposta_({ ok: true, versao: VERSAO, movimentos, prateleiras, reset: Number(props.getProperty('RESET_TS') || 0), resetPrat: props.getProperty('RESET_PRAT') === '1',
@@ -225,7 +225,7 @@ function doPost(e) {
       const shp = abaCom_(ABA_PRAT, CAB_PRAT), np = shp.getLastRow(), lin = {};
       if (np > 1) shp.getRange(2, 1, np - 1, 1).getValues().forEach((v, i) => lin[String(v[0])] = i + 2);
       d.prateleiras.forEach(p => {
-        const row = [p.id, Number(p.numero), p.embalagem, p.situacao || 'Ativa', p.obs || '', new Date(), d.usuario || ''];
+        const row = [p.id, Number(p.numero), p.embalagem, p.situacao || 'Ativa', p.obs || '', new Date(), d.usuario || '', Number(p.linhas) || ''];
         if (lin[p.id]) shp.getRange(lin[p.id], 1, 1, CAB_PRAT.length).setValues([row]); else { shp.appendRow(row); lin[p.id] = shp.getLastRow(); }
         pratOk.push(p.id + '|' + (p.situacao || 'Ativa') + '|' + p.numero);
       });

@@ -245,7 +245,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26g</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26h</div>
     </section>
   </main>
 
@@ -834,7 +834,7 @@ function escolherPosicao(c, acao){
   // a caixinha de 0,5 kg pode ir também nas prateleiras de 1 kg (com o endereçamento delas)
   const prats = prateleiras().filter(p=>L.cabeNa(c.emb, p.embalagem) && p.situacao!=='Inativa').sort((a,b)=>(a.embalagem===c.emb?0:1)-(b.embalagem===c.emb?0:1)||a.numero-b.numero);
   if(!prats.length){ toast('Nenhuma prateleira de '+L.nomeEmbAceitas(c.emb)+'.'); return; }
-  const pp = L.perfisPrateleiras(EST, prateleiras()), embDe = n => (prats.find(p=>p.numero===n)||prats[0]).embalagem;
+  const pp = L.perfisPrateleiras(EST, prateleiras()), pratDe = n => prats.find(p=>p.numero===n)||prats[0], embDe = n => pratDe(n).embalagem;
   const opt = (n, f) => Array.from({length:n}, (_,i)=>`<option value="${i+1}">${f(i+1)}</option>`).join('');
   const base0 = c.sug || (c.e && c.e.slot); const base = base0 && prats.some(p=>p.numero===base0.prateleira) ? base0 : { prateleira:prats[0].numero, andar:1, linha:1, lado:L.EMBALAGENS[prats[0].embalagem].lados[0], altura:1 };
   sheet(`<h2>Escolher posição</h2><div class="small">${esc(L.nomeEmb(c.emb))} · amostra <b class="mono">${esc(c.a.protocolo)}</b></div>
@@ -849,7 +849,7 @@ function escolherPosicao(c, acao){
     <div id="epMsg"></div>
     <div class="row"><button class="btn ghost" id="epVoltar">Voltar</button><button class="btn" id="epOk">Confirmar posição</button></div>`);
   // linha/lado/altura seguem o endereçamento da prateleira escolhida
-  const montar = n => { const ep = embDe(n), E = L.EMBALAGENS[ep], keep = (id, v) => { const o = $(id).querySelector(`option[value="${v}"]`); if(o) $(id).value = v; };
+  const montar = n => { const ep = embDe(n), E = L.dimPrat(pratDe(n)), keep = (id, v) => { const o = $(id).querySelector(`option[value="${v}"]`); if(o) $(id).value = v; };
     const vL = $('#epL').value, vLa = $('#epLado').value, vH = $('#epH').value;
     $('#epL').innerHTML = opt(E.linhas, n=>'L.'+L.p2(n)); $('#epLado').innerHTML = E.lados.slice().reverse().map(l=>`<option value="${l}">${L.nomeLado(l)}</option>`).join(''); $('#epH').innerHTML = opt(E.alturas, n=>L.nomeAltura(ep, n));
     keep('#epL', vL); keep('#epLado', vLa); keep('#epH', vH);
@@ -923,10 +923,13 @@ function novaPrateleira(embIni, depois){
   sheet(`<h2>Nova prateleira</h2><div class="small">Todas as prateleiras têm 4 andares. A capacidade depende da embalagem. A prateleira assume o perfil da primeira amostra armazenada (cultura, tratamento, produtor e grupo de remessa).</div>
     <label class="f">Número<input type="number" id="npNum" min="1" value="${prox}"></label>
     <div><h3 style="margin-bottom:6px">Embalagem</h3><div class="seg" id="npEmb">${Object.entries(L.EMBALAGENS).map(([k,v])=>`<button data-emb="${k}" aria-pressed="${k===(embIni||'CX1')}">${v.nome}</button>`).join('')}</div></div>
+    <div id="npLinBox"><h3 style="margin-bottom:6px">Linhas por andar</h3><div class="seg" id="npLin"><button data-lin="15" aria-pressed="true">15 linhas</button><button data-lin="14" aria-pressed="false">14 linhas</button></div></div>
     <div class="small" id="npCap"></div>
     <div class="row"><button class="btn ghost" id="npCancel">Cancelar</button><button class="btn" id="npOk">Cadastrar</button></div>`);
-  let emb = embIni || 'CX1';
-  const cap = () => { const E = L.EMBALAGENS[emb]; $('#npCap').textContent = `${E.nome}: ${E.alturas} na altura × ${E.lados.length} na largura/profundidade × ${E.linhas} linhas × 4 andares = ${L.capPrateleira(emb)} amostras.`; };
+  let emb = embIni || 'CX1', lin = 15;
+  const cap = () => { const op = L.LINHAS_OPCOES[emb]; $('#npLinBox').hidden = !op; const nl = op ? lin : L.EMBALAGENS[emb].linhas; const E = L.EMBALAGENS[emb];
+    $('#npCap').textContent = `${E.nome}: ${E.alturas} na altura × ${E.lados.length} na largura/profundidade × ${nl} linhas × 4 andares = ${L.capPrateleira(emb, nl)} amostras.`; };
+  $('#npLin').onclick = ev => { const b = ev.target.closest('[data-lin]'); if(!b) return; lin = +b.dataset.lin; $('#npLin').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); cap(); };
   cap();
   $('#npEmb').onclick = ev => { const b = ev.target.closest('[data-emb]'); if(!b) return; emb = b.dataset.emb; $('#npEmb').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); cap(); };
   $('#npCancel').onclick = () => depois ? depois() : fecharSheet();
@@ -934,7 +937,7 @@ function novaPrateleira(embIni, depois){
     const n = parseInt($('#npNum').value, 10);
     if(!(n>0)){ toast('Número inválido.'); return; }
     if(prateleiras().some(p=>p.numero===n)){ toast('Já existe a prateleira '+L.p2(n)+'.'); return; }
-    const p = { id:uid(), numero:n, embalagem:emb, situacao:'Ativa', obs:'', ts:Date.now() };
+    const p = { id:uid(), numero:n, embalagem:emb, linhas: L.LINHAS_OPCOES[emb] ? lin : L.EMBALAGENS[emb].linhas, situacao:'Ativa', obs:'', ts:Date.now() };
     db.prateleiras.push(p); db.filaPrat.push(p); save(); sincronizar();
     toast('Prateleira '+L.p2(n)+' cadastrada'); if(depois) depois(); else { fecharSheet(); render(); }
   };
@@ -943,13 +946,13 @@ $('#btnNovaPrat').onclick = () => novaPrateleira();
 function renderArquivo(){
   const est = Object.values(EST), prats = prateleiras(), pp = L.perfisPrateleiras(EST, prats);
   const noArq = est.filter(e=>e.status==='ARQUIVO').length, emSala = est.filter(e=>e.status==='SALA').length;
-  const cap = prats.filter(p=>p.situacao!=='Inativa').reduce((s,p)=>s+L.capPrateleira(p.embalagem),0);
+  const cap = prats.filter(p=>p.situacao!=='Inativa').reduce((s,p)=>s+L.capPrateleira(p.embalagem, p.linhas),0);
   $('#statsArq').innerHTML = `<button class="stat" data-ir="ARQUIVO"><div class="n">${noArq}</div><div class="t">No arquivo</div></button>
     <button class="stat ${emSala?'warn':''}" data-ir="SALA"><div class="n">${emSala}</div><div class="t">Em salas</div></button>
     <div class="stat"><div class="n">${cap?Math.round((noArq+emSala)/cap*100):0}%</div><div class="t">Ocupação · ${prats.length} prat.</div></div>`;
   $('#statsArq').onclick = e => { const b = e.target.closest('[data-ir]'); if(b){ filtroAm = b.dataset.ir; show('amostras'); } };
   $('#listPrat').innerHTML = prats.length ? prats.map(p=>{
-    const x = pp[p.numero] || {}, capP = L.capPrateleira(p.embalagem), us = x.usadas||0, G = x.perfil ? (L.GRUPOS[x.perfil.grupo]||L.GRUPOS.OUTROS) : null;
+    const x = pp[p.numero] || {}, capP = L.capPrateleira(p.embalagem, p.linhas), us = x.usadas||0, G = x.perfil ? (L.GRUPOS[x.perfil.grupo]||L.GRUPOS.OUTROS) : null;
     return `<button class="card prat" data-prat="${p.numero}"><div class="hd"><span class="num">P.${L.p2(p.numero)}</span><span class="pill mut">${esc(L.nomeEmb(p.embalagem))}</span>${p.situacao==='Inativa'?'<span class="pill bad">Inativa</span>':''}<span style="margin-left:auto" class="mono">${us}/${capP}</span></div>
       <div class="small">${G?`<span class="swatch" style="background:${G.cor}"></span>`:''}${esc(x.perfil ? L.textoPerfil(x.perfil) : 'Livre: assume o perfil da 1ª amostra')}</div>
       <div class="bar"><i style="width:${Math.min(100,us/capP*100)}%"></i></div></button>`; }).join('')
@@ -958,7 +961,7 @@ function renderArquivo(){
 }
 function verPrateleira(num, andar){
   const p = prateleiras().find(x=>x.numero===num); if(!p) return;
-  const E = L.EMBALAGENS[p.embalagem], capL = L.capLinha(p.embalagem);
+  const E = L.dimPrat(p), capL = L.capLinha(p.embalagem);
   const am = Object.values(EST).filter(e=>e.slot && (e.status==='ARQUIVO'||e.status==='SALA') && e.slot.prateleira===num);
   const x = L.perfisPrateleiras(EST, prateleiras())[num] || {};
   let cells = '';
@@ -968,6 +971,7 @@ function verPrateleira(num, andar){
     <div class="seg" id="vpA">${[1,2,3,4].map(a=>`<button data-a="${a}" aria-pressed="${a===andar}">Andar ${L.p2(a)}</button>`).join('')}</div>
     <div class="lgrid" id="vpL">${cells}</div>
     <div id="vpLinha"></div>
+    ${L.LINHAS_OPCOES[p.embalagem]?`<div class="row" style="align-items:center"><span class="small" style="flex:1 1 auto">Linhas por andar</span><div class="seg" id="vpLin" style="flex:0 0 auto">${L.LINHAS_OPCOES[p.embalagem].map(n=>`<button data-lin="${n}" aria-pressed="${n===E.linhas}">${n}</button>`).join('')}</div></div>`:''}
     <div class="row"><button class="btn ghost" id="vpFechar">Fechar</button><button class="btn ghost" id="vpSit">${p.situacao==='Inativa'?'Reativar':'Desativar'} prateleira</button></div>`);
   $('#vpA').onclick = e => { const b = e.target.closest('[data-a]'); if(b) verPrateleira(num, +b.dataset.a); };
   $('#vpL').onclick = e => { const b = e.target.closest('[data-l]'); if(!b) return; const l = +b.dataset.l;
@@ -976,6 +980,9 @@ function verPrateleira(num, andar){
       ${da.length?`<button class="btn sec sm" data-etq="${num}|${andar}|${l}">Imprimir etiqueta desta linha</button>`:''}</div>`; };
   $('#vpLinha').onclick = e => { const b = e.target.closest('[data-prot]'); if(b){ abrirAmostra(b.dataset.prot); return; } const t = e.target.closest('[data-etq]'); if(t){ const [pp,aa,ll] = t.dataset.etq.split('|').map(Number); imprimirEtiquetas([[pp,aa,ll]]); } };
   $('#vpFechar').onclick = fecharSheet;
+  if($('#vpLin')) $('#vpLin').onclick = ev => { const b = ev.target.closest('[data-lin]'); if(!b) return; const nl = +b.dataset.lin; if(nl===E.linhas) return;
+    if(am.some(x=>x.slot.linha>nl)){ toast('Há amostras na linha '+L.p2(E.linhas)+'. Remaneje-as antes de reduzir para '+nl+' linhas.'); return; }
+    const n = Object.assign({}, p, { linhas:nl, ts:Date.now() }); const i = db.prateleiras.findIndex(x=>x.id===p.id); if(i>=0) db.prateleiras[i] = n; else db.prateleiras.push(n); db.filaPrat.push(n); save(); sincronizar(); toast('Prateleira '+L.p2(num)+': '+nl+' linhas por andar'); verPrateleira(num, andar); render(); };
   $('#vpSit').onclick = () => { if(am.length && p.situacao!=='Inativa' && !confirm('A prateleira tem '+am.length+' amostra(s). Desativar mesmo assim? Ela não recebe novas amostras.')) return;
     const n = Object.assign({}, p, { situacao: p.situacao==='Inativa'?'Ativa':'Inativa', ts:Date.now() }); const i = db.prateleiras.findIndex(x=>x.id===p.id); if(i>=0) db.prateleiras[i] = n; else db.prateleiras.push(n); db.filaPrat.push(n); save(); sincronizar(); fecharSheet(); render(); };
 }
@@ -1146,11 +1153,11 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26g';
+  const app = 'App versão 2026.10.26h';
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
-    el.innerHTML = app + ' · Script v' + v + (v < 5 ? ' <b style="color:#b42318">(desatualizado: implante a versão 5)</b>' : ''); }
+    el.innerHTML = app + ' · Script v' + v + (v < 6 ? ' <b style="color:#b42318">(desatualizado: implante a versão 6)</b>' : ''); }
   catch(e){ el.textContent = app + ' · Script: sem conexão'; }
 }
 async function iniciarLogin(){

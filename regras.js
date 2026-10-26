@@ -100,7 +100,8 @@
   /* ---------- Embalagens e endereçamento ---------- */
   const EMBALAGENS = {
     CX1:   { nome: 'Caixinha 1 kg', dim: '9 × 9 × 18 cm', linhas: 15, lados: ['T', 'F'], alturas: 5, letras: true },
-    CX05:  { nome: 'Caixinha 0,5 kg', dim: '9 × 9 × 9 cm', linhas: 15, lados: ['T1', 'T2', 'F1', 'F2'], alturas: 5, letras: true },
+    // lados em ordem espacial, do fundo para o corredor: Trás 02 · Trás 01 · Frente 02 · Frente 01 (Frente 01 = a da frente)
+    CX05:  { nome: 'Caixinha 0,5 kg', dim: '9 × 9 × 9 cm', linhas: 15, lados: ['T2', 'T1', 'F2', 'F1'], alturas: 5, letras: true },
     KRAFT: { nome: 'Saco kraft', dim: '17 × 38 cm', linhas: 7, lados: ['T', 'F'], alturas: 30, letras: false }
   };
   const ANDARES = 4;
@@ -119,7 +120,7 @@
     if (!s || !s.prateleira) return '';
     return 'P.' + p2(s.prateleira) + ' | A.' + p2(s.andar) + ' | L.' + p2(s.linha) + ' · ' + nomeLado(s.lado) + ' · ' + nomeAltura(emb, s.altura);
   }
-  // ordem de preenchimento: andar 1→4, linha 1→N, Trás antes da Frente, de baixo para cima
+  // ordem de preenchimento: andar 1→4, linha 1→N, do fundo para a frente (Trás antes da Frente), de baixo para cima
   function* ordemSlots(prateleira, emb) {
     const e = EMBALAGENS[emb]; if (!e) return;
     for (let a = 1; a <= ANDARES; a++) for (let l = 1; l <= e.linhas; l++) for (const lado of e.lados) for (let h = 1; h <= e.alturas; h++)

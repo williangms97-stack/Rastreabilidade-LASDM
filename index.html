@@ -245,7 +245,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26d</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26e</div>
     </section>
   </main>
 
@@ -851,7 +851,7 @@ function escolherPosicao(c, acao){
   // linha/lado/altura seguem o endereçamento da prateleira escolhida
   const montar = n => { const ep = embDe(n), E = L.EMBALAGENS[ep], keep = (id, v) => { const o = $(id).querySelector(`option[value="${v}"]`); if(o) $(id).value = v; };
     const vL = $('#epL').value, vLa = $('#epLado').value, vH = $('#epH').value;
-    $('#epL').innerHTML = opt(E.linhas, n=>'L.'+L.p2(n)); $('#epLado').innerHTML = E.lados.map(l=>`<option value="${l}">${L.nomeLado(l)}</option>`).join(''); $('#epH').innerHTML = opt(E.alturas, n=>L.nomeAltura(ep, n));
+    $('#epL').innerHTML = opt(E.linhas, n=>'L.'+L.p2(n)); $('#epLado').innerHTML = E.lados.slice().reverse().map(l=>`<option value="${l}">${L.nomeLado(l)}</option>`).join(''); $('#epH').innerHTML = opt(E.alturas, n=>L.nomeAltura(ep, n));
     keep('#epL', vL); keep('#epLado', vLa); keep('#epH', vH);
     $('#epObs').textContent = ep!==c.emb ? 'Caixinha de 0,5 kg numa prateleira de 1 kg: ocupa uma posição de 1 kg (Trás/Frente, alturas A–E).' : ''; };
   $('#epP').value = base.prateleira; montar(base.prateleira); $('#epA').value = base.andar; $('#epL').value = base.linha; $('#epLado').value = base.lado; $('#epH').value = base.altura;
@@ -1144,7 +1144,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26d';
+  const app = 'App versão 2026.10.26e';
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

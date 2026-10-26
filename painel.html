@@ -247,7 +247,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26i';
+  const app = 'App versão 2026.10.26j';
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -349,7 +349,7 @@ function render(){
   renderSalas();
   renderMovimentos();
   renderRefStatus();
-  $('#rodape').textContent = `Painel versão 2026.10.26i · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
+  $('#rodape').textContent = `Painel versão 2026.10.26j · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -547,15 +547,19 @@ function renderViz(){
   if(!prats.some(p=>p.numero===VZ.num)){ const pp = L.perfisPrateleiras(EST, prats); const c = prats.find(p=>(pp[p.numero]||{}).usadas) || prats[0]; VZ.num = c.numero; VZ.lado = null; }
   $('#vzP').innerHTML = prats.map(p=>`<option value="${p.numero}">P.${L.p2(p.numero)} · ${esc(L.nomeEmb(p.embalagem))}${L.LINHAS_OPCOES[p.embalagem]&&L.nLinhas(p.embalagem,p.linhas)!==15?' · '+L.nLinhas(p.embalagem,p.linhas)+' linhas':''}</option>`).join(''); $('#vzP').value = VZ.num;
   const p = prats.find(x=>x.numero===VZ.num), E = L.dimPrat(p), occ = slotsPrat(p);
-  if(!VZ.lado || E.lados.indexOf(VZ.lado)<0) VZ.lado = E.lados[E.lados.length-1];
+  // prateleira de 1 kg com caixinhas de 0,5 kg: mostra as 4 camadas (a caixinha de 1 kg aparece nas duas camadas da sua metade)
+  const sub = p.embalagem==='CX1' && Object.values(occ).some(e=>L.ehSubLado(e.slot.lado));
+  const camadas = sub ? L.EMBALAGENS.CX05.lados : E.lados;
+  const naCamada = (a, li, al, lado) => occ[L.chaveSlot({ prateleira:p.numero, andar:a, linha:li, lado, altura:al })] || (sub ? occ[L.chaveSlot({ prateleira:p.numero, andar:a, linha:li, lado:lado.charAt(0), altura:al })] : null);
+  if(!VZ.lado || camadas.indexOf(VZ.lado)<0) VZ.lado = camadas[camadas.length-1];
   document.querySelectorAll('#prats .prat').forEach(el=>el.classList.toggle('on', +el.dataset.prat===VZ.num));
   // legenda: grupos presentes
   const grupos = [...new Set(Object.values(occ).map(e=>L.classificar(e).grupo))];
   $('#vzLeg').innerHTML = grupos.map(g=>{ const G = L.GRUPOS[g]||L.GRUPOS.OUTROS; return `<span><i style="background:${G.cor}"></i>${esc(G.curto||g)}</span>`; }).join('')
     + `<span><i style="background:#eef2f0"></i>Livre</span>`
-    + (Object.values(occ).some(e=>e.embalagem && e.embalagem!==p.embalagem) ? `<span><i style="background:linear-gradient(#83E28E 50%,#d9f4dc 50%)"></i>Caixinha 0,5 kg em posição de 1 kg</span>` : '');
+    + (sub ? `<span><i style="background:linear-gradient(#83E28E 50%,#d9f4dc 50%)"></i>Caixinha 0,5 kg</span>` : '');
   // camadas (profundidade)
-  $('#vzCam').innerHTML = E.lados.slice().reverse().map(l=>`<button data-l="${l}" aria-pressed="${l===VZ.lado}">${esc(L.nomeLado(l))}</button>`).join('');
+  $('#vzCam').innerHTML = camadas.slice().reverse().map(l=>`<button data-l="${l}" aria-pressed="${l===VZ.lado}">${esc(L.nomeLado(l))}</button>`).join('');
   const n = Object.keys(occ).length, cap = L.capPrateleira(p.embalagem, p.linhas);
   $('#vzCont').textContent = `${n} de ${cap} posições ocupadas`;
   // mapa 2D: um quadro por andar (A.04 em cima), linhas nas colunas, alturas nas linhas (A embaixo)
@@ -563,8 +567,8 @@ function renderViz(){
   for(let a=4; a>=1; a--){
     let cel = '';
     for(let al=E.alturas; al>=1; al--) for(let li=1; li<=E.linhas; li++){
-      const k = L.chaveSlot({ prateleira:p.numero, andar:a, linha:li, lado:VZ.lado, altura:al }), e = occ[k];
-      const cls = e ? 'oc' + (e.status==='SALA' ? ' sala' : '') + (e.embalagem && e.embalagem!==p.embalagem ? ' meia' : '') : '';
+      const e = naCamada(a, li, al, VZ.lado), k = e ? L.chaveSlot(e.slot) : L.chaveSlot({ prateleira:p.numero, andar:a, linha:li, lado:VZ.lado, altura:al });
+      const cls = e ? 'oc' + (e.status==='SALA' ? ' sala' : '') + (L.ehSubLado(e.slot.lado) && p.embalagem==='CX1' ? ' meia' : '') : '';
       const tip = e ? tipAm(e, p) : `<b>Livre</b><br>${esc(L.textoSlot({ prateleira:p.numero, andar:a, linha:li, lado:VZ.lado, altura:al }, p.embalagem))}`;
       cel += `<i class="${cls}${VZ.sel===k?' sel':''}" data-k="${k}" style="${e?'background-color:'+(e.status==='SALA'?COR_SALA:corAm(e)):''}" data-tip="${tip.replace(/"/g,'&quot;')}"></i>`;
     }
@@ -642,22 +646,28 @@ async function cena3D(p, E, occ){
     // posições livres (fantasma) e ocupadas
     const tot = 4*E.linhas*E.lados.length*E.alturas, geo = new THREE.BoxGeometry(1,1,1);
     G3.vz = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color:0x8fa69c, transparent:true, opacity:0.07, depthWrite:false }), tot); g.add(G3.vz);
-    G3.oc = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color:0xffffff }), tot); g.add(G3.oc);
+    G3.oc = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color:0xffffff }), tot*2); g.add(G3.oc);
     G3.cena.add(g); G3.chave = chave; G3.vistaFeita = false;
   }
   // posiciona as caixinhas
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(), cor = new THREE.Color();
   let iv = 0, io = 0; G3.itens = [];
+  const xyz = (s, il, nl) => [ -W/2 + (s.linha-0.5)*cw, base + Ha*(s.andar-1) + (s.altura-0.5)*ch, -D/2 + (il+0.5)*D/nl ];
+  // posições livres (fantasma): uma por posição da prateleira, se não houver nada nela (nem caixinha de 0,5 kg naquela metade)
+  const temSub = {}; Object.values(occ).forEach(e=>{ if(p.embalagem==='CX1' && L.ehSubLado(e.slot.lado)) temSub[[e.slot.andar, e.slot.linha, e.slot.lado.charAt(0), e.slot.altura].join('-')] = 1; });
   for(let a=1; a<=4; a++) for(let li=1; li<=E.linhas; li++) E.lados.forEach((lado, il)=>{ for(let al=1; al<=E.alturas; al++){
-    const k = L.chaveSlot({ prateleira:p.numero, andar:a, linha:li, lado, altura:al }), e = occ[k];
-    const x = -W/2 + (li-0.5)*cw, y = base + Ha*(a-1) + (al-0.5)*ch, z = -D/2 + (il+0.5)*cd;
-    if(!e){ m.compose(v.set(x,y,z), q, sc.set(cw*0.9, ch*0.86, cd*0.92)); G3.vz.setMatrixAt(iv++, m); continue; }
-    const meia = e.embalagem && e.embalagem!==p.embalagem; // 0,5 kg numa posição de 1 kg: meia profundidade, encostada na frente
-    m.compose(v.set(x, y, meia ? z + cd*0.24 : z), q, sc.set(cw*0.9, ch*0.86, cd*(meia ? 0.46 : 0.92)));
-    G3.oc.setMatrixAt(io, m);
+    const s0 = { prateleira:p.numero, andar:a, linha:li, lado, altura:al };
+    if(occ[L.chaveSlot(s0)] || temSub[[a, li, lado.charAt(0), al].join('-')]) continue;
+    const [x,y,z] = xyz(s0, il, E.lados.length); m.compose(v.set(x,y,z), q, sc.set(cw*0.9, ch*0.86, cd*0.92)); G3.vz.setMatrixAt(iv++, m);
+  } });
+  // caixinhas ocupadas; 0,5 kg na prateleira de 1 kg ocupa 1/4 da profundidade (Trás 02 · Trás 01 · Frente 02 · Frente 01)
+  Object.entries(occ).forEach(([k, e])=>{
+    const sub = p.embalagem==='CX1' && L.ehSubLado(e.slot.lado), lados = sub ? L.EMBALAGENS.CX05.lados : E.lados, il = Math.max(0, lados.indexOf(e.slot.lado));
+    const [x,y,z] = xyz(e.slot, il, lados.length), prof = D/lados.length;
+    m.compose(v.set(x,y,z), q, sc.set(cw*0.9, ch*0.86, prof*0.92)); G3.oc.setMatrixAt(io, m);
     cor.set(k===VZ.sel ? '#173f35' : e.status==='SALA' ? COR_SALA : corAm(e)); if(k!==VZ.sel && e.status!=='SALA') cor.lerp(new THREE.Color('#c9b48f'), 0.18);
     G3.oc.setColorAt(io, cor); G3.itens[io] = { k, e }; io++;
-  } });
+  });
   G3.vz.count = iv; G3.oc.count = io; G3.vz.instanceMatrix.needsUpdate = true; G3.oc.instanceMatrix.needsUpdate = true; if(G3.oc.instanceColor) G3.oc.instanceColor.needsUpdate = true;
   ajustar3D(); if(!G3.vistaFeita){ vista3D('perspectiva'); G3.vistaFeita = true; } else desenhar3D();
 }

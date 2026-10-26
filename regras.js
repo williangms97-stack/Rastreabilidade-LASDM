@@ -112,6 +112,22 @@
   const ANDARES = 4;
   // a caixinha de 0,5 kg também pode ir na prateleira de 1 kg (ocupa uma posição de 1 kg: Trás/Frente, A–E)
   const cabeNa = (embAmostra, embPrat) => embAmostra === embPrat || (embAmostra === 'CX05' && embPrat === 'CX1');
+  /* Caixinha de 0,5 kg na prateleira de 1 kg: cabem 2 na profundidade de cada metade (9 + 9 = 18 cm),
+     então ela usa as 4 posições da 0,5 kg (Trás 02 · Trás 01 · Frente 02 · Frente 01). Cada metade (Trás ou Frente)
+     de uma linha/andar é uma coluna só de 1 kg OU só de 0,5 kg — não se empilha uma sobre a outra. */
+  const ladosPara = (embAmostra, pr) => (pr.embalagem === 'CX1' && embAmostra === 'CX05') ? EMBALAGENS.CX05.lados : EMBALAGENS[pr.embalagem].lados;
+  const metadeLado = l => String(l || '').charAt(0);
+  const ehSubLado = l => String(l || '').length === 2;
+  function conflitoMetade(est, slot, pr) {
+    if (!pr || pr.embalagem !== 'CX1') return '';
+    const sub = ehSubLado(slot.lado), m = metadeLado(slot.lado);
+    for (const e of Object.values(est)) {
+      const s = e.slot; if (!s || e.status !== 'ARQUIVO') continue;
+      if (Number(s.prateleira) !== Number(slot.prateleira) || s.andar !== slot.andar || s.linha !== slot.linha || metadeLado(s.lado) !== m) continue;
+      if (ehSubLado(s.lado) !== sub) return 'a metade ' + (m === 'T' ? 'Trás' : 'Frente') + ' desta linha já tem caixinha de ' + (sub ? '1 kg' : '0,5 kg') + ' (' + e.protocolo + '); 1 kg e 0,5 kg não se empilham juntas';
+    }
+    return '';
+  }
   const nomeEmbAceitas = e => e === 'CX05' ? 'Caixinha 0,5 kg ou 1 kg' : nomeEmb(e);
   const nomeEmb = k => (EMBALAGENS[k] || {}).nome || k || '—';
   const capLinha = k => { const e = EMBALAGENS[k]; return e ? e.lados.length * e.alturas : 0; };
@@ -192,7 +208,8 @@
     // prateleiras da própria embalagem primeiro; a caixinha de 0,5 kg pode seguir depois para as de 1 kg
     const ativas = (prateleiras || []).filter(p => p.situacao !== 'Inativa' && cabeNa(embalagem, p.embalagem))
       .sort((a, b) => (a.embalagem === embalagem ? 0 : 1) - (b.embalagem === embalagem ? 0 : 1) || a.numero - b.numero);
-    const livre = (pr, a) => { for (const s of ordemSlots(pr.numero, pr.embalagem, pr.linhas)) if (s.andar === a && !occ[chaveSlot(s)]) return s; return null; };
+    const livre = (pr, a) => { const emb = (pr.embalagem === 'CX1' && embalagem === 'CX05') ? 'CX05' : pr.embalagem;
+      for (const s of ordemSlots(pr.numero, emb, pr.linhas)) if (s.andar === a && !occ[chaveSlot(s)] && !conflitoMetade(ests, s, pr)) return s; return null; };
     const obs = pr => pr.embalagem !== embalagem ? ' (caixinha de 0,5 kg na prateleira de 1 kg)' : '';
     const perfilAndar = (pr, a) => { const x = pp[pr.numero]; return x && x.andares[a] ? x.andares[a].perfil : null; };
     // 1º: andar que já tem o mesmo perfil (continua a sequência)
@@ -211,10 +228,11 @@
     if (pr.situacao === 'Inativa') return ['Prateleira ' + p2(pr.numero) + ' está inativa.'];
     if (!cabeNa(embalagem, pr.embalagem)) return ['A prateleira ' + p2(pr.numero) + ' é de ' + nomeEmb(pr.embalagem) + '.'];
     const e = dimPrat(pr);
-    if (!(slot.andar >= 1 && slot.andar <= ANDARES && slot.linha >= 1 && slot.linha <= e.linhas && e.lados.indexOf(slot.lado) >= 0 && slot.altura >= 1 && slot.altura <= e.alturas)) return ['Posição fora da capacidade da prateleira.'];
+    if (!(slot.andar >= 1 && slot.andar <= ANDARES && slot.linha >= 1 && slot.linha <= e.linhas && ladosPara(embalagem, pr).indexOf(slot.lado) >= 0 && slot.altura >= 1 && slot.altura <= e.alturas)) return ['Posição fora da capacidade da prateleira.'];
     const ests = Object.assign({}, est); if (excetoProt) delete ests[excetoProt];
     const ocup = ocupacao(ests)[chaveSlot(slot)];
     if (ocup) return ['Posição ocupada pela amostra ' + ocup.protocolo + '.'];
+    const cm = conflitoMetade(ests, slot, pr); if (cm) return ['Não pode: ' + cm + '.'];
     // apoio: da altura B para cima precisa haver caixinha/saco logo abaixo (nada fica "flutuando")
     if (slot.altura > 1) {
       const oc = ocupacao(ests), em = h => oc[chaveSlot(Object.assign({}, slot, { altura: h }))];
@@ -456,7 +474,7 @@
   G.LASDM = {
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
-    EMBALAGENS, ANDARES, LINHAS_OPCOES, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
+    EMBALAGENS, ANDARES, LINHAS_OPCOES, ladosPara, conflitoMetade, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
     ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };

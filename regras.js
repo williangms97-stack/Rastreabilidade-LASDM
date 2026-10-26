@@ -168,7 +168,11 @@
       ['especie', 'cultivar', 'lote', 'produtor', 'tipoAnalise', 'remessa', 'tratamento', 'classificacao', 'embalagem', 'categoria'].forEach(k => { if (m[k]) e[k] = m[k]; });
       e.ultimo = m.ts; e.ultimoMov = m.acao; e.usuario = m.usuario; e.fotoUrl = m.fotoUrl || e.fotoUrl;
       if (m.acao === 'ARMAZENAR' || m.acao === 'REMANEJAR' || m.acao === 'RETORNO') {
-        if (m.prateleira) e.slot = { prateleira: Number(m.prateleira), andar: Number(m.andar), linha: Number(m.linha), lado: m.lado, altura: Number(m.altura) };
+        if (m.prateleira) {
+          // registros antigos: caixinha 0,5 kg gravada como "Trás"/"Frente" (formato de 1 kg) → posição de 0,5 kg (Trás 02 = fundo, Frente 01 = frente)
+          let lado = m.lado; if ((m.embalagem || e.embalagem) === 'CX05' && (lado === 'T' || lado === 'F')) lado = lado === 'T' ? 'T2' : 'F1';
+          e.slot = { prateleira: Number(m.prateleira), andar: Number(m.andar), linha: Number(m.linha), lado: lado, altura: Number(m.altura) };
+        }
         e.local = 'Arquivo refrigerado'; e.status = 'ARQUIVO'; e.desde = m.ts;
       } else if (m.acao === 'SALA') { if (e.slot) e.slotAnterior = e.slot; e.slot = null; e.local = m.destino; e.status = 'SALA'; e.desde = m.ts; }
       else if (m.acao === 'BAIXA') { e.local = 'Baixada'; e.status = 'BAIXA'; e.slot = null; e.desde = m.ts; }
@@ -472,7 +476,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.10.26k',
+    VERSAO_REGRAS: '2026.10.26l',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, ladosPara, conflitoMetade, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

@@ -245,7 +245,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.24b</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26</div>
     </section>
   </main>
 
@@ -828,22 +828,31 @@ function desenharAcoes(c){
   };
 }
 function escolherPosicao(c, acao){
-  const prats = prateleiras().filter(p=>p.embalagem===c.emb && p.situacao!=='Inativa');
-  if(!prats.length){ toast('Nenhuma prateleira de '+L.nomeEmb(c.emb)+'.'); return; }
-  const E = L.EMBALAGENS[c.emb], pp = L.perfisPrateleiras(EST, prateleiras());
+  // a caixinha de 0,5 kg pode ir também nas prateleiras de 1 kg (com o endereçamento delas)
+  const prats = prateleiras().filter(p=>L.cabeNa(c.emb, p.embalagem) && p.situacao!=='Inativa').sort((a,b)=>(a.embalagem===c.emb?0:1)-(b.embalagem===c.emb?0:1)||a.numero-b.numero);
+  if(!prats.length){ toast('Nenhuma prateleira de '+L.nomeEmbAceitas(c.emb)+'.'); return; }
+  const pp = L.perfisPrateleiras(EST, prateleiras()), embDe = n => (prats.find(p=>p.numero===n)||prats[0]).embalagem;
   const opt = (n, f) => Array.from({length:n}, (_,i)=>`<option value="${i+1}">${f(i+1)}</option>`).join('');
-  const base = c.sug || (c.e && c.e.slot) || { prateleira:prats[0].numero, andar:1, linha:1, lado:E.lados[0], altura:1 };
+  const base0 = c.sug || (c.e && c.e.slot); const base = base0 && prats.some(p=>p.numero===base0.prateleira) ? base0 : { prateleira:prats[0].numero, andar:1, linha:1, lado:L.EMBALAGENS[prats[0].embalagem].lados[0], altura:1 };
   sheet(`<h2>Escolher posição</h2><div class="small">${esc(L.nomeEmb(c.emb))} · amostra <b class="mono">${esc(c.a.protocolo)}</b></div>
-    <label class="f">Prateleira<select id="epP">${prats.map(p=>{ const x = pp[p.numero]; return `<option value="${p.numero}">P.${L.p2(p.numero)} · ${x&&x.perfil?esc(L.textoPerfil(x.perfil)):'livre'}</option>`; }).join('')}</select></label>
+    <label class="f">Prateleira<select id="epP">${prats.map(p=>{ const x = pp[p.numero]; return `<option value="${p.numero}">P.${L.p2(p.numero)}${p.embalagem!==c.emb?' (1 kg)':''} · ${x&&x.perfil?esc(L.textoPerfil(x.perfil)):'livre'}</option>`; }).join('')}</select></label>
     <div class="grid2">
       <label class="f">Andar<select id="epA">${opt(4, n=>'A.'+L.p2(n))}</select></label>
-      <label class="f">Linha<select id="epL">${opt(E.linhas, n=>'L.'+L.p2(n))}</select></label>
-      <label class="f">Lado<select id="epLado">${E.lados.map(l=>`<option value="${l}">${L.nomeLado(l)}</option>`).join('')}</select></label>
-      <label class="f">Altura<select id="epH">${opt(E.alturas, n=>L.nomeAltura(c.emb, n))}</select></label>
+      <label class="f">Linha<select id="epL"></select></label>
+      <label class="f">Lado<select id="epLado"></select></label>
+      <label class="f">Altura<select id="epH"></select></label>
     </div>
+    <div class="small" id="epObs"></div>
     <div id="epMsg"></div>
     <div class="row"><button class="btn ghost" id="epVoltar">Voltar</button><button class="btn" id="epOk">Confirmar posição</button></div>`);
-  $('#epP').value = base.prateleira; $('#epA').value = base.andar; $('#epL').value = base.linha; $('#epLado').value = base.lado; $('#epH').value = base.altura;
+  // linha/lado/altura seguem o endereçamento da prateleira escolhida
+  const montar = n => { const ep = embDe(n), E = L.EMBALAGENS[ep], keep = (id, v) => { const o = $(id).querySelector(`option[value="${v}"]`); if(o) $(id).value = v; };
+    const vL = $('#epL').value, vLa = $('#epLado').value, vH = $('#epH').value;
+    $('#epL').innerHTML = opt(E.linhas, n=>'L.'+L.p2(n)); $('#epLado').innerHTML = E.lados.map(l=>`<option value="${l}">${L.nomeLado(l)}</option>`).join(''); $('#epH').innerHTML = opt(E.alturas, n=>L.nomeAltura(ep, n));
+    keep('#epL', vL); keep('#epLado', vLa); keep('#epH', vH);
+    $('#epObs').textContent = ep!==c.emb ? 'Caixinha de 0,5 kg numa prateleira de 1 kg: ocupa uma posição de 1 kg (Trás/Frente, alturas A–E).' : ''; };
+  $('#epP').value = base.prateleira; montar(base.prateleira); $('#epA').value = base.andar; $('#epL').value = base.linha; $('#epLado').value = base.lado; $('#epH').value = base.altura;
+  $('#epP').addEventListener('change', ()=>montar(+$('#epP').value));
   const slot = () => ({ prateleira:+$('#epP').value, andar:+$('#epA').value, linha:+$('#epL').value, lado:$('#epLado').value, altura:+$('#epH').value });
   const checar = () => { const m = L.validarPosicao(c.a, c.emb, slot(), EST, prateleiras(), c.a.protocolo); $('#epMsg').innerHTML = m.length ? `<div class="alert bad">${m.map(esc).join('<br>')}</div>` : '<div class="alert ok">Posição livre e compatível com as regras.</div>'; $('#epOk').disabled = !!m.length; };
   ['#epP','#epA','#epL','#epLado','#epH'].forEach(id=>$(id).onchange = checar); checar();
@@ -946,7 +955,7 @@ function verPrateleira(num, andar){
   $('#vpA').onclick = e => { const b = e.target.closest('[data-a]'); if(b) verPrateleira(num, +b.dataset.a); };
   $('#vpL').onclick = e => { const b = e.target.closest('[data-l]'); if(!b) return; const l = +b.dataset.l;
     const da = am.filter(x=>x.slot.andar===andar && x.slot.linha===l).sort((a,b)=>E.lados.indexOf(a.slot.lado)-E.lados.indexOf(b.slot.lado)||a.slot.altura-b.slot.altura);
-    $('#vpLinha').innerHTML = `<div class="card" style="background:var(--bg)"><h3>Linha ${L.p2(l)} · andar ${L.p2(andar)}</h3>${da.length ? da.map(x=>`<button class="item" data-prot="${esc(x.protocolo)}"><span class="prot">${esc(x.protocolo)}</span><span class="side">${esc(L.nomeLado(x.slot.lado))} · ${esc(L.nomeAltura(p.embalagem, x.slot.altura))}</span><span class="meta">${esc(x.cultivar||'')} · ${esc(x.remessa||x.classificacao||'')}${x.status==='SALA'?' · em '+esc(x.local):''}</span></button>`).join('') : '<div class="small">Linha vazia.</div>'}
+    $('#vpLinha').innerHTML = `<div class="card" style="background:var(--bg)"><h3>Linha ${L.p2(l)} · andar ${L.p2(andar)}</h3>${da.length ? da.map(x=>`<button class="item" data-prot="${esc(x.protocolo)}"><span class="prot">${esc(x.protocolo)}</span><span class="side">${esc(L.nomeLado(x.slot.lado))} · ${esc(L.nomeAltura(p.embalagem, x.slot.altura))}${x.embalagem && x.embalagem!==p.embalagem?' · '+esc(L.nomeEmb(x.embalagem)):''}</span><span class="meta">${esc(x.cultivar||'')} · ${esc(x.remessa||x.classificacao||'')}${x.status==='SALA'?' · em '+esc(x.local):''}</span></button>`).join('') : '<div class="small">Linha vazia.</div>'}
       ${da.length?`<button class="btn sec sm" data-etq="${num}|${andar}|${l}">Imprimir etiqueta desta linha</button>`:''}</div>`; };
   $('#vpLinha').onclick = e => { const b = e.target.closest('[data-prot]'); if(b){ abrirAmostra(b.dataset.prot); return; } const t = e.target.closest('[data-etq]'); if(t){ const [pp,aa,ll] = t.dataset.etq.split('|').map(Number); imprimirEtiquetas([[pp,aa,ll]]); } };
   $('#vpFechar').onclick = fecharSheet;
@@ -1118,7 +1127,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.24b';
+  const app = 'App versão 2026.10.26';
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

@@ -104,6 +104,9 @@
     KRAFT: { nome: 'Saco kraft', dim: '17 × 38 cm', linhas: 7, lados: ['T', 'F'], alturas: 30, letras: false }
   };
   const ANDARES = 4;
+  // a caixinha de 0,5 kg também pode ir na prateleira de 1 kg (ocupa uma posição de 1 kg: Trás/Frente, A–E)
+  const cabeNa = (embAmostra, embPrat) => embAmostra === embPrat || (embAmostra === 'CX05' && embPrat === 'CX1');
+  const nomeEmbAceitas = e => e === 'CX05' ? 'Caixinha 0,5 kg ou 1 kg' : nomeEmb(e);
   const nomeEmb = k => (EMBALAGENS[k] || {}).nome || k || '—';
   const capLinha = k => { const e = EMBALAGENS[k]; return e ? e.lados.length * e.alturas : 0; };
   const capAndar = k => { const e = EMBALAGENS[k]; return e ? e.linhas * capLinha(k) : 0; };
@@ -167,14 +170,16 @@
   /* Sugere a posição para uma amostra respeitando as regras.
      Prioridade: prateleira já com o mesmo perfil (continua a sequência) → prateleira vazia da mesma embalagem. */
   function sugerirPosicao(amostra, embalagem, est, prateleiras, excetoProt) {
-    const pa = perfil(amostra, embalagem), ka = chavePerfil(pa);
     const ests = Object.assign({}, est); if (excetoProt) delete ests[excetoProt];
     const occ = ocupacao(ests), pp = perfisPrateleiras(ests, prateleiras);
-    const ativas = (prateleiras || []).filter(p => p.situacao !== 'Inativa' && p.embalagem === embalagem).sort((a, b) => a.numero - b.numero);
-    const livre = num => { for (const s of ordemSlots(num, embalagem)) if (!occ[chaveSlot(s)]) return s; return null; };
-    for (const pr of ativas) { const x = pp[pr.numero]; if (x && x.perfil && chavePerfil(x.perfil) === ka) { const s = livre(pr.numero); if (s) return { slot: s, motivo: 'Continua a sequência da prateleira ' + p2(pr.numero) }; } }
-    for (const pr of ativas) { const x = pp[pr.numero]; if (!x || !x.perfil) { const s = livre(pr.numero); if (s) return { slot: s, motivo: 'Prateleira ' + p2(pr.numero) + ' livre (passa a ser deste perfil)' }; } }
-    return { slot: null, motivo: ativas.length ? 'Nenhuma prateleira de ' + nomeEmb(embalagem) + ' livre para este perfil. Cadastre uma nova prateleira.' : 'Nenhuma prateleira de ' + nomeEmb(embalagem) + ' cadastrada.' };
+    // prateleiras da própria embalagem primeiro; a caixinha de 0,5 kg pode seguir depois para as de 1 kg
+    const ativas = (prateleiras || []).filter(p => p.situacao !== 'Inativa' && cabeNa(embalagem, p.embalagem))
+      .sort((a, b) => (a.embalagem === embalagem ? 0 : 1) - (b.embalagem === embalagem ? 0 : 1) || a.numero - b.numero);
+    const livre = pr => { for (const s of ordemSlots(pr.numero, pr.embalagem)) if (!occ[chaveSlot(s)]) return s; return null; };
+    const obs = pr => pr.embalagem !== embalagem ? ' (caixinha de 0,5 kg na prateleira de 1 kg)' : '';
+    for (const pr of ativas) { const x = pp[pr.numero]; if (x && x.perfil && chavePerfil(x.perfil) === chavePerfil(perfil(amostra, pr.embalagem))) { const s = livre(pr); if (s) return { slot: s, embPrat: pr.embalagem, motivo: 'Continua a sequência da prateleira ' + p2(pr.numero) + obs(pr) }; } }
+    for (const pr of ativas) { const x = pp[pr.numero]; if (!x || !x.perfil) { const s = livre(pr); if (s) return { slot: s, embPrat: pr.embalagem, motivo: 'Prateleira ' + p2(pr.numero) + ' livre (passa a ser deste perfil)' + obs(pr) }; } }
+    return { slot: null, motivo: ativas.length ? 'Nenhuma prateleira de ' + nomeEmbAceitas(embalagem) + ' livre para este perfil. Cadastre uma nova prateleira.' : 'Nenhuma prateleira de ' + nomeEmbAceitas(embalagem) + ' cadastrada.' };
   }
   // confere se uma posição escolhida à mão respeita as regras
   function validarPosicao(amostra, embalagem, slot, est, prateleiras, excetoProt) {
@@ -182,14 +187,14 @@
     const pr = (prateleiras || []).find(p => Number(p.numero) === Number(slot.prateleira));
     if (!pr) return ['Prateleira ' + slot.prateleira + ' não cadastrada.'];
     if (pr.situacao === 'Inativa') return ['Prateleira ' + p2(pr.numero) + ' está inativa.'];
-    if (pr.embalagem !== embalagem) return ['A prateleira ' + p2(pr.numero) + ' é de ' + nomeEmb(pr.embalagem) + '.'];
-    const e = EMBALAGENS[embalagem];
+    if (!cabeNa(embalagem, pr.embalagem)) return ['A prateleira ' + p2(pr.numero) + ' é de ' + nomeEmb(pr.embalagem) + '.'];
+    const e = EMBALAGENS[pr.embalagem];
     if (!(slot.andar >= 1 && slot.andar <= ANDARES && slot.linha >= 1 && slot.linha <= e.linhas && e.lados.indexOf(slot.lado) >= 0 && slot.altura >= 1 && slot.altura <= e.alturas)) return ['Posição fora da capacidade da prateleira.'];
     const ests = Object.assign({}, est); if (excetoProt) delete ests[excetoProt];
     const ocup = ocupacao(ests)[chaveSlot(slot)];
     if (ocup) return ['Posição ocupada pela amostra ' + ocup.protocolo + '.'];
     const x = perfisPrateleiras(ests, prateleiras)[pr.numero];
-    if (x && x.perfil) { const m = motivosIncompat(perfil(amostra, embalagem), x.perfil); if (m.length) return m.map(t => 'Não pode: ' + t + '.'); }
+    if (x && x.perfil) { const m = motivosIncompat(perfil(amostra, pr.embalagem), x.perfil); if (m.length) return m.map(t => 'Não pode: ' + t + '.'); }
     return [];
   }
 
@@ -346,7 +351,7 @@
 
   G.LASDM = {
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, motivosIncompat,
-    EMBALAGENS, ANDARES, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
+    EMBALAGENS, ANDARES, cabeNa, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
     ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };

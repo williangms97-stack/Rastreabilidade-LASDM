@@ -82,18 +82,23 @@
     return { cultura: c.cultura, tratada: c.tratada, inova: c.inova, grupo: c.grupo, embalagem: embalagem || a.embalagem || '' };
   }
   const chavePerfil = p => [p.cultura, p.tratada ? 'TRAT' : 'SEM', p.inova ? 'INOVA' : 'GERAL', p.grupo, p.embalagem].join('|');
+  // resumo dos perfis por andar, ex.: "A.01–A.02: SOJA · … · A.03: MILHO · … · A.04: livre"
+  function textoAndares(x) {
+    if (!x || !x.andares) return 'Livre';
+    return [1, 2, 3, 4].map(a => 'A.' + p2(a) + ': ' + (x.andares[a] && x.andares[a].perfil ? textoPerfil(x.andares[a].perfil) : 'livre')).join('\n');
+  }
   function textoPerfil(p) {
     if (!p) return 'Livre';
     return [p.cultura, p.tratada ? 'Tratada' : 'Sem tratamento', p.inova ? 'INOVA GENÉTICA' : 'Demais produtores', (GRUPOS[p.grupo] || {}).curto || p.grupo].join(' · ');
   }
-  // explica por que a amostra não pode entrar numa prateleira com outro perfil
+  // explica por que a amostra não pode entrar num andar com outro perfil (a separação é por ANDAR da prateleira)
   function motivosIncompat(pa, pb) {
     const m = [];
     if (pa.embalagem !== pb.embalagem) m.push('embalagem diferente (' + nomeEmb(pb.embalagem) + ')');
-    if (pa.cultura !== pb.cultura) m.push('cultura diferente (' + pb.cultura + ')');
-    if (pa.tratada !== pb.tratada) m.push(pb.tratada ? 'prateleira de amostras tratadas' : 'prateleira de amostras sem tratamento');
-    if (pa.inova !== pb.inova) m.push(pb.inova ? 'prateleira exclusiva INOVA GENÉTICA' : 'INOVA GENÉTICA não fica com os demais produtores');
-    if (pa.grupo !== pb.grupo) m.push('tipo de remessa de outro grupo (' + ((GRUPOS[pb.grupo] || {}).curto || pb.grupo) + ')');
+    if (pa.cultura !== pb.cultura) m.push('cultura diferente neste andar (' + pb.cultura + ')');
+    if (pa.tratada !== pb.tratada) m.push(pb.tratada ? 'andar de amostras tratadas' : 'andar de amostras sem tratamento');
+    if (pa.inova !== pb.inova) m.push(pb.inova ? 'andar exclusivo INOVA GENÉTICA' : 'INOVA GENÉTICA não fica no mesmo andar dos demais produtores');
+    if (pa.grupo !== pb.grupo) m.push('andar com tipo de remessa de outro grupo (' + ((GRUPOS[pb.grupo] || {}).curto || pb.grupo) + ')');
     return m;
   }
 
@@ -161,31 +166,42 @@
     Object.values(est).forEach(e => { if (e.slot && (e.status === 'ARQUIVO' || e.status === 'SALA')) occ[chaveSlot(e.slot)] = e; });
     return occ;
   }
-  // perfil atual de cada prateleira = perfil das amostras que estão nela
+  /* Perfil de cada ANDAR = perfil das amostras que estão nele (cultura, tratamento, INOVA e grupo de remessa).
+     Uma prateleira pode ter perfis diferentes em andares diferentes; o mesmo andar nunca mistura perfis.
+     x.perfil = perfil do primeiro andar ocupado (só para exibição); x.andares[a] = { perfil, usadas }; x.perfis = perfis distintos. */
   function perfisPrateleiras(est, prateleiras) {
-    const r = {};
-    (prateleiras || []).forEach(pr => { r[pr.numero] = { prateleira: pr, perfil: null, usadas: 0, amostras: [] }; });
+    const r = {}, novo = pr => ({ prateleira: pr, perfil: null, usadas: 0, amostras: [], andares: { 1: { perfil: null, usadas: 0 }, 2: { perfil: null, usadas: 0 }, 3: { perfil: null, usadas: 0 }, 4: { perfil: null, usadas: 0 } }, perfis: [] });
+    (prateleiras || []).forEach(pr => { r[pr.numero] = novo(pr); });
     Object.values(est).forEach(e => {
       if (!e.slot || !(e.status === 'ARQUIVO' || e.status === 'SALA')) return;
-      const k = e.slot.prateleira; const pr = r[k] || (r[k] = { prateleira: { numero: k, embalagem: e.embalagem, situacao: 'Ativa' }, perfil: null, usadas: 0, amostras: [] });
-      if (!pr.perfil) pr.perfil = perfil(e, pr.prateleira.embalagem || e.embalagem);
-      pr.usadas++; pr.amostras.push(e);
+      const k = e.slot.prateleira; const pr = r[k] || (r[k] = novo({ numero: k, embalagem: e.embalagem, situacao: 'Ativa' }));
+      const an = pr.andares[e.slot.andar] || (pr.andares[e.slot.andar] = { perfil: null, usadas: 0 });
+      if (!an.perfil) an.perfil = perfil(e, pr.prateleira.embalagem || e.embalagem);
+      an.usadas++; pr.usadas++; pr.amostras.push(e);
+    });
+    Object.values(r).forEach(pr => {
+      [1, 2, 3, 4].forEach(a => { const p = pr.andares[a] && pr.andares[a].perfil; if (p) { if (!pr.perfil) pr.perfil = p; if (!pr.perfis.some(x => chavePerfil(x) === chavePerfil(p))) pr.perfis.push(p); } });
     });
     return r;
   }
   /* Sugere a posição para uma amostra respeitando as regras.
-     Prioridade: prateleira já com o mesmo perfil (continua a sequência) → prateleira vazia da mesma embalagem. */
+     Prioridade: andar já com o mesmo perfil (continua a sequência) → andar vazio (da própria embalagem primeiro). */
   function sugerirPosicao(amostra, embalagem, est, prateleiras, excetoProt) {
     const ests = Object.assign({}, est); if (excetoProt) delete ests[excetoProt];
     const occ = ocupacao(ests), pp = perfisPrateleiras(ests, prateleiras);
     // prateleiras da própria embalagem primeiro; a caixinha de 0,5 kg pode seguir depois para as de 1 kg
     const ativas = (prateleiras || []).filter(p => p.situacao !== 'Inativa' && cabeNa(embalagem, p.embalagem))
       .sort((a, b) => (a.embalagem === embalagem ? 0 : 1) - (b.embalagem === embalagem ? 0 : 1) || a.numero - b.numero);
-    const livre = pr => { for (const s of ordemSlots(pr.numero, pr.embalagem, pr.linhas)) if (!occ[chaveSlot(s)]) return s; return null; };
+    const livre = (pr, a) => { for (const s of ordemSlots(pr.numero, pr.embalagem, pr.linhas)) if (s.andar === a && !occ[chaveSlot(s)]) return s; return null; };
     const obs = pr => pr.embalagem !== embalagem ? ' (caixinha de 0,5 kg na prateleira de 1 kg)' : '';
-    for (const pr of ativas) { const x = pp[pr.numero]; if (x && x.perfil && chavePerfil(x.perfil) === chavePerfil(perfil(amostra, pr.embalagem))) { const s = livre(pr); if (s) return { slot: s, embPrat: pr.embalagem, motivo: 'Continua a sequência da prateleira ' + p2(pr.numero) + obs(pr) }; } }
-    for (const pr of ativas) { const x = pp[pr.numero]; if (!x || !x.perfil) { const s = livre(pr); if (s) return { slot: s, embPrat: pr.embalagem, motivo: 'Prateleira ' + p2(pr.numero) + ' livre (passa a ser deste perfil)' + obs(pr) }; } }
-    return { slot: null, motivo: ativas.length ? 'Nenhuma prateleira de ' + nomeEmbAceitas(embalagem) + ' livre para este perfil. Cadastre uma nova prateleira.' : 'Nenhuma prateleira de ' + nomeEmbAceitas(embalagem) + ' cadastrada.' };
+    const perfilAndar = (pr, a) => { const x = pp[pr.numero]; return x && x.andares[a] ? x.andares[a].perfil : null; };
+    // 1º: andar que já tem o mesmo perfil (continua a sequência)
+    for (const pr of ativas) for (let a = 1; a <= ANDARES; a++) { const pa = perfilAndar(pr, a);
+      if (pa && chavePerfil(pa) === chavePerfil(perfil(amostra, pr.embalagem))) { const s = livre(pr, a); if (s) return { slot: s, embPrat: pr.embalagem, motivo: 'Continua a sequência do andar A.' + p2(a) + ' da prateleira ' + p2(pr.numero) + obs(pr) }; } }
+    // 2º: andar vazio (passa a ser deste perfil)
+    for (const pr of ativas) for (let a = 1; a <= ANDARES; a++) { if (perfilAndar(pr, a)) continue;
+      const s = livre(pr, a); if (s) return { slot: s, embPrat: pr.embalagem, motivo: 'Andar A.' + p2(a) + ' da prateleira ' + p2(pr.numero) + ' livre (passa a ser deste perfil)' + obs(pr) }; }
+    return { slot: null, motivo: ativas.length ? 'Nenhum andar de ' + nomeEmbAceitas(embalagem) + ' livre para este perfil. Cadastre uma nova prateleira.' : 'Nenhuma prateleira de ' + nomeEmbAceitas(embalagem) + ' cadastrada.' };
   }
   // confere se uma posição escolhida à mão respeita as regras
   function validarPosicao(amostra, embalagem, slot, est, prateleiras, excetoProt) {
@@ -205,8 +221,8 @@
       if (!em(slot.altura - 1)) { let h = 1; while (h < slot.altura && em(h)) h++;
         return ['Não pode: a posição abaixo (' + nomeAltura(pr.embalagem, slot.altura - 1) + ') está vazia; a ' + (pr.embalagem === 'KRAFT' ? 'embalagem' : 'caixinha') + ' precisa ficar apoiada. Use a altura ' + nomeAltura(pr.embalagem, h) + ' desta pilha.']; }
     }
-    const x = perfisPrateleiras(ests, prateleiras)[pr.numero];
-    if (x && x.perfil) { const m = motivosIncompat(perfil(amostra, pr.embalagem), x.perfil); if (m.length) return m.map(t => 'Não pode: ' + t + '.'); }
+    const x = perfisPrateleiras(ests, prateleiras)[pr.numero], pa = x && x.andares[slot.andar] && x.andares[slot.andar].perfil;
+    if (pa) { const m = motivosIncompat(perfil(amostra, pr.embalagem), pa); if (m.length) return m.map(t => 'Não pode: ' + t + '.'); }
     return [];
   }
 
@@ -438,7 +454,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, motivosIncompat,
+    up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,

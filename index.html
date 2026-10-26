@@ -151,6 +151,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
 }
 @media (max-width:420px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.lgrid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
+.pandares{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--ink-2)}.pandares div{display:flex;align-items:center;gap:6px;min-width:0}.pandares b{flex:0 0 auto;font-size:11px;color:var(--muted)}.pandares span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -245,7 +246,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26h</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26i</div>
     </section>
   </main>
 
@@ -838,7 +839,7 @@ function escolherPosicao(c, acao){
   const opt = (n, f) => Array.from({length:n}, (_,i)=>`<option value="${i+1}">${f(i+1)}</option>`).join('');
   const base0 = c.sug || (c.e && c.e.slot); const base = base0 && prats.some(p=>p.numero===base0.prateleira) ? base0 : { prateleira:prats[0].numero, andar:1, linha:1, lado:L.EMBALAGENS[prats[0].embalagem].lados[0], altura:1 };
   sheet(`<h2>Escolher posição</h2><div class="small">${esc(L.nomeEmb(c.emb))} · amostra <b class="mono">${esc(c.a.protocolo)}</b></div>
-    <label class="f">Prateleira<select id="epP">${prats.map(p=>{ const x = pp[p.numero]; return `<option value="${p.numero}">P.${L.p2(p.numero)}${p.embalagem!==c.emb?' (1 kg)':''} · ${x&&x.perfil?esc(L.textoPerfil(x.perfil)):'livre'}</option>`; }).join('')}</select></label>
+    <label class="f">Prateleira<select id="epP">${prats.map(p=>{ const x = pp[p.numero]; return `<option value="${p.numero}">P.${L.p2(p.numero)}${p.embalagem!==c.emb?' (1 kg)':''} · ${x&&x.perfis&&x.perfis.length>1?x.perfis.length+' perfis (por andar)':x&&x.perfil?esc(L.textoPerfil(x.perfil)):'livre'}</option>`; }).join('')}</select></label>
     <div class="grid2">
       <label class="f">Andar<select id="epA">${opt(4, n=>'A.'+L.p2(n))}</select></label>
       <label class="f">Linha<select id="epL"></select></label>
@@ -917,10 +918,16 @@ function renderUltimo(){
   el.innerHTML = `<h3>Último movimento deste aparelho</h3><div><b class="mono">${esc(m.protocolo)}</b> · ${esc(NOME_ACAO[m.acao]||m.acao)}${m.posicao?' · <span class="mono">'+esc(m.posicao)+'</span>':''}${m.acao==='SALA'?' · '+esc(m.destino):''}</div><div class="small">${esc(m.data)} ${esc(m.hora.slice(0,5))} · ${m.enviado?'enviado ✓':'na fila'}</div>`;
 }
 
+/* perfil de cada andar (A.04 em cima, como na prateleira física) */
+function andaresHTML(x){
+  return `<div class="pandares">${[4,3,2,1].map(a=>{ const an = x && x.andares && x.andares[a], p = an && an.perfil, G = p ? (L.GRUPOS[p.grupo]||L.GRUPOS.OUTROS) : null;
+    return `<div><b>A.${L.p2(a)}</b>${G?`<span class="swatch" style="background:${G.cor}"></span>`:''}<span>${esc(p ? L.textoPerfil(p) : 'livre')}</span></div>`; }).join('')}</div>`;
+}
+
 /* ================== PRATELEIRAS ================== */
 function novaPrateleira(embIni, depois){
   const nums = prateleiras().map(p=>p.numero), prox = nums.length ? Math.max(...nums)+1 : 1;
-  sheet(`<h2>Nova prateleira</h2><div class="small">Todas as prateleiras têm 4 andares. A capacidade depende da embalagem. A prateleira assume o perfil da primeira amostra armazenada (cultura, tratamento, produtor e grupo de remessa).</div>
+  sheet(`<h2>Nova prateleira</h2><div class="small">Todas as prateleiras têm 4 andares. A capacidade depende da embalagem. Cada ANDAR assume o perfil da primeira amostra armazenada nele (cultura, tratamento, produtor e grupo de remessa).</div>
     <label class="f">Número<input type="number" id="npNum" min="1" value="${prox}"></label>
     <div><h3 style="margin-bottom:6px">Embalagem</h3><div class="seg" id="npEmb">${Object.entries(L.EMBALAGENS).map(([k,v])=>`<button data-emb="${k}" aria-pressed="${k===(embIni||'CX1')}">${v.nome}</button>`).join('')}</div></div>
     <div id="npLinBox"><h3 style="margin-bottom:6px">Linhas por andar</h3><div class="seg" id="npLin"><button data-lin="15" aria-pressed="true">15 linhas</button><button data-lin="14" aria-pressed="false">14 linhas</button></div></div>
@@ -954,7 +961,7 @@ function renderArquivo(){
   $('#listPrat').innerHTML = prats.length ? prats.map(p=>{
     const x = pp[p.numero] || {}, capP = L.capPrateleira(p.embalagem, p.linhas), us = x.usadas||0, G = x.perfil ? (L.GRUPOS[x.perfil.grupo]||L.GRUPOS.OUTROS) : null;
     return `<button class="card prat" data-prat="${p.numero}"><div class="hd"><span class="num">P.${L.p2(p.numero)}</span><span class="pill mut">${esc(L.nomeEmb(p.embalagem))}</span>${p.situacao==='Inativa'?'<span class="pill bad">Inativa</span>':''}<span style="margin-left:auto" class="mono">${us}/${capP}</span></div>
-      <div class="small">${G?`<span class="swatch" style="background:${G.cor}"></span>`:''}${esc(x.perfil ? L.textoPerfil(x.perfil) : 'Livre: assume o perfil da 1ª amostra')}</div>
+      ${andaresHTML(x)}
       <div class="bar"><i style="width:${Math.min(100,us/capP*100)}%"></i></div></button>`; }).join('')
     : '<div class="empty">Nenhuma prateleira cadastrada. Toque em <b>+ Prateleira</b> para começar.</div>';
   $('#listPrat').onclick = e => { const b = e.target.closest('[data-prat]'); if(b) verPrateleira(+b.dataset.prat, 1); };
@@ -967,7 +974,7 @@ function verPrateleira(num, andar){
   let cells = '';
   for(let l=1; l<=E.linhas; l++){ const n = am.filter(e=>e.slot.andar===andar && e.slot.linha===l).length; cells += `<button class="lcell ${n>=capL?'cheia':n?'parcial':''}" data-l="${l}"><b>L.${L.p2(l)}</b>${n}/${capL}</button>`; }
   sheet(`<div class="row" style="align-items:center"><h2 style="flex:2 1 auto">Prateleira ${L.p2(num)}</h2><span class="pill mut">${esc(L.nomeEmb(p.embalagem))}</span></div>
-    <div class="small">${esc(x.perfil ? L.textoPerfil(x.perfil) : 'Livre')}</div>
+    <div class="small">Andar ${L.p2(andar)}: <b>${esc(x.andares && x.andares[andar] && x.andares[andar].perfil ? L.textoPerfil(x.andares[andar].perfil) : 'livre (assume o perfil da 1ª amostra)')}</b></div>
     <div class="seg" id="vpA">${[1,2,3,4].map(a=>`<button data-a="${a}" aria-pressed="${a===andar}">Andar ${L.p2(a)}</button>`).join('')}</div>
     <div class="lgrid" id="vpL">${cells}</div>
     <div id="vpLinha"></div>
@@ -1153,7 +1160,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26h';
+  const app = 'App versão 2026.10.26i';
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

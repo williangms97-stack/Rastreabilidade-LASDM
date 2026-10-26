@@ -122,6 +122,7 @@ tbody tr:hover{background:#f7fbf9}
 .loginbox .btn{height:48px;font-size:16px}
 .empty{color:var(--muted);text-align:center;padding:20px;border:1.5px dashed var(--line);border-radius:10px}
 .pagina[hidden]{display:none}
+.pandares{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--ink-2)}.pandares div{display:flex;align-items:center;gap:6px;min-width:0}.pandares b{flex:0 0 auto;font-size:11px;color:var(--muted)}.pandares span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -155,7 +156,7 @@ tbody tr:hover{background:#f7fbf9}
 
   <!-- ARQUIVO E SALAS -->
   <section class="pagina" id="arquivo" hidden>
-    <div class="card"><div><h2>Ocupação das prateleiras</h2><div class="sub">Cada prateleira tem 4 andares; o gráfico mostra a ocupação de cada andar. O perfil vem da primeira amostra armazenada.</div></div><div class="prats" id="prats"></div></div>
+    <div class="card"><div><h2>Ocupação das prateleiras</h2><div class="sub">Cada prateleira tem 4 andares; o gráfico mostra a ocupação de cada andar. Cada andar tem o seu perfil (cultura, tratamento, INOVA e grupo de remessa), vindo da primeira amostra armazenada nele; andares diferentes podem ter perfis diferentes.</div></div><div class="prats" id="prats"></div></div>
     <div class="card" style="margin-top:18px" id="vzCard">
       <div class="vzhd"><div><h2>Visualização da prateleira</h2><div class="sub">3D para enxergar o volume (arraste para girar, role para aproximar) e mapa 2D por andar, visto de frente. Clique em uma posição para ver a amostra.</div></div>
         <div class="fbar"><label>Prateleira<select id="vzP"></select></label></div></div>
@@ -246,7 +247,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26h';
+  const app = 'App versão 2026.10.26i';
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -348,7 +349,7 @@ function render(){
   renderSalas();
   renderMovimentos();
   renderRefStatus();
-  $('#rodape').textContent = `Painel versão 2026.10.26h · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
+  $('#rodape').textContent = `Painel versão 2026.10.26i · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -370,9 +371,14 @@ function renderPrateleiras(){
     const x = pp[p.numero] || { usadas:0, amostras:[] }, capP = L.capPrateleira(p.embalagem, p.linhas), capA = L.capAndar(p.embalagem, p.linhas), G = x.perfil ? (L.GRUPOS[x.perfil.grupo]||L.GRUPOS.OUTROS) : null;
     const porA = [1,2,3,4].map(a=>x.amostras.filter(e=>e.slot.andar===a).length);
     return `<div class="prat clic" data-prat="${p.numero}" title="Ver em 3D e no mapa"><div class="hd"><span class="num">P.${L.p2(p.numero)}</span><span class="pill mut">${esc(L.nomeEmb(p.embalagem))}</span>${p.situacao==='Inativa'?'<span class="pill bad">Inativa</span>':''}<span style="margin-left:auto" class="v mono">${x.usadas}/${capP}</span></div>
-      <div class="sub">${G?`<span class="swatch" style="background:${G.cor}"></span>`:''}${esc(x.perfil?L.textoPerfil(x.perfil):'Livre')}</div>
-      <div class="andares">${porA.map((n,i)=>`<div data-tip="<b>Andar ${L.p2(i+1)}</b><br>${n} de ${capA}"><i style="height:${n/capA*100}%"></i><span>A.${L.p2(i+1)}</span></div>`).join('')}</div></div>`; }).join('')
+      ${andaresHTML(x)}
+      <div class="andares">${porA.map((n,i)=>`<div data-tip="<b>Andar ${L.p2(i+1)}</b><br>${n} de ${capA}<br>${esc(x.andares&&x.andares[i+1]&&x.andares[i+1].perfil?L.textoPerfil(x.andares[i+1].perfil):'livre')}"><i style="height:${n/capA*100}%"></i><span>A.${L.p2(i+1)}</span></div>`).join('')}</div></div>`; }).join('')
     : '<div class="empty">Nenhuma prateleira cadastrada (cadastre pelo app).</div>';
+}
+/* perfil de cada andar (A.04 em cima, como na prateleira física) */
+function andaresHTML(x){
+  return `<div class="pandares">${[4,3,2,1].map(a=>{ const an = x && x.andares && x.andares[a], p = an && an.perfil, G = p ? (L.GRUPOS[p.grupo]||L.GRUPOS.OUTROS) : null;
+    return `<div><b>A.${L.p2(a)}</b>${G?`<span class="swatch" style="background:${G.cor}"></span>`:''}<span>${esc(p ? L.textoPerfil(p) : 'livre')}</span></div>`; }).join('')}</div>`;
 }
 /* tabela simples com ordenação e paginação */
 const TAB = {};

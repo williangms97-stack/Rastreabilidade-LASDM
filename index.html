@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.26p"></script>
+<script src="regras.js?v=2026.10.26q"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.26p'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.26q'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -248,7 +248,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26p</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.26q</div>
     </section>
   </main>
 
@@ -980,6 +980,7 @@ function verPrateleira(num, andar){
     <div class="seg" id="vpA">${[1,2,3,4].map(a=>`<button data-a="${a}" aria-pressed="${a===andar}">Andar ${L.p2(a)}</button>`).join('')}</div>
     <div class="lgrid" id="vpL">${cells}</div>
     <div id="vpLinha"></div>
+    ${!am.length?`<div><div class="small" style="margin-bottom:4px">Embalagem (só pode mudar com a prateleira vazia)</div><div class="seg" id="vpEmb">${Object.entries(L.EMBALAGENS).map(([k,v])=>`<button data-emb="${k}" aria-pressed="${k===p.embalagem}">${esc(v.nome)}</button>`).join('')}</div></div>`:''}
     ${L.LINHAS_OPCOES[p.embalagem]?`<div class="row" style="align-items:center"><span class="small" style="flex:1 1 auto">Linhas por andar</span><div class="seg" id="vpLin" style="flex:0 0 auto">${L.LINHAS_OPCOES[p.embalagem].map(n=>`<button data-lin="${n}" aria-pressed="${n===E.linhas}">${n}</button>`).join('')}</div></div>`:''}
     <div class="row"><button class="btn ghost" id="vpFechar">Fechar</button><button class="btn ghost" id="vpSit">${p.situacao==='Inativa'?'Reativar':'Desativar'} prateleira</button></div>`);
   $('#vpA').onclick = e => { const b = e.target.closest('[data-a]'); if(b) verPrateleira(num, +b.dataset.a); };
@@ -989,6 +990,12 @@ function verPrateleira(num, andar){
       ${da.length?`<button class="btn sec sm" data-etq="${num}|${andar}|${l}">Imprimir etiqueta desta linha</button>`:''}</div>`; };
   $('#vpLinha').onclick = e => { const b = e.target.closest('[data-prot]'); if(b){ abrirAmostra(b.dataset.prot); return; } const t = e.target.closest('[data-etq]'); if(t){ const [pp,aa,ll] = t.dataset.etq.split('|').map(Number); imprimirEtiquetas([[pp,aa,ll]]); } };
   $('#vpFechar').onclick = fecharSheet;
+  if($('#vpEmb')) $('#vpEmb').onclick = ev => { const b = ev.target.closest('[data-emb]'); if(!b) return; const emb = b.dataset.emb; if(emb===p.embalagem) return;
+    if(Object.values(EST).some(x=>x.slot && x.slot.prateleira===num && (x.status==='ARQUIVO'||x.status==='SALA'))){ toast('A prateleira não está vazia: remaneje as amostras antes de mudar a embalagem.'); return; }
+    if(!confirm('Mudar a prateleira '+L.p2(num)+' de '+L.nomeEmb(p.embalagem)+' para '+L.nomeEmb(emb)+'?')) return;
+    const n = Object.assign({}, p, { embalagem:emb, linhas: L.LINHAS_OPCOES[emb] ? (L.LINHAS_OPCOES[p.embalagem] && p.linhas ? p.linhas : 15) : L.EMBALAGENS[emb].linhas, ts:Date.now() });
+    const i = db.prateleiras.findIndex(x=>x.id===p.id); if(i>=0) db.prateleiras[i] = n; else db.prateleiras.push(n); db.filaPrat.push(n); save(); sincronizar();
+    toast('Prateleira '+L.p2(num)+': agora é de '+L.nomeEmb(emb)+' ('+L.capPrateleira(emb, n.linhas)+' posições)'); verPrateleira(num, andar); render(); };
   if($('#vpLin')) $('#vpLin').onclick = ev => { const b = ev.target.closest('[data-lin]'); if(!b) return; const nl = +b.dataset.lin; if(nl===E.linhas) return;
     if(am.some(x=>x.slot.linha>nl)){ toast('Há amostras na linha '+L.p2(E.linhas)+'. Remaneje-as antes de reduzir para '+nl+' linhas.'); return; }
     const n = Object.assign({}, p, { linhas:nl, ts:Date.now() }); const i = db.prateleiras.findIndex(x=>x.id===p.id); if(i>=0) db.prateleiras[i] = n; else db.prateleiras.push(n); db.filaPrat.push(n); save(); sincronizar(); toast('Prateleira '+L.p2(num)+': '+nl+' linhas por andar'); verPrateleira(num, andar); render(); };
@@ -1162,7 +1169,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26p' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.26p' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.26q' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.26q' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

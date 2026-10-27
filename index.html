@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.27p"></script>
+<script src="regras.js?v=2026.10.27q"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27p'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27q'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -32,13 +32,19 @@ button,input,select{font:inherit;color:inherit}
 header.top{position:sticky;top:0;z-index:20;background:var(--ink);color:#f2f7f4;
   padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));
   display:flex;align-items:center;justify-content:space-between;gap:12px}
-.brand{display:flex;flex-direction:column;line-height:1.1}
-.brand b{font-size:18px;letter-spacing:.02em}
-.brand small{font-size:12px;opacity:.75;text-transform:uppercase;letter-spacing:.08em}
-.syncbadge{font-size:12px;font-weight:700;border-radius:6px;padding:4px 8px;white-space:nowrap;border:0;cursor:pointer;background:rgba(255,255,255,.14);color:inherit}
-.syncbadge.ok{background:#1d7a4f;color:#fff}.syncbadge.pend{background:#a85f00;color:#fff}.syncbadge.err{background:#b3261e;color:#fff}
+.brand{display:flex;align-items:center;gap:10px;line-height:1.1;min-width:0}
+.brand>div{display:flex;flex-direction:column;min-width:0}
+.brand .logo{width:46px;height:46px;flex:0 0 auto;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
+.brand b{font-size:20px;letter-spacing:.01em;white-space:nowrap}
+.brand small{font-size:11.5px;opacity:.75;text-transform:uppercase;letter-spacing:.14em;margin-top:2px}
+header.top{flex-wrap:wrap;background:var(--ink) radial-gradient(circle at 92% 0%,rgba(255,255,255,.07) 0 34%,transparent 35%)}
+.hdr-right{flex:1 1 100%;justify-content:space-between}
+.syncbadge svg,.userchip svg{width:16px;height:16px;flex:0 0 auto}
+.syncbadge.ok svg{color:#8fe0b0}
+.syncbadge{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;border-radius:8px;padding:6px 10px;white-space:nowrap;border:0;cursor:pointer;background:rgba(255,255,255,.14);color:inherit}
+.syncbadge.ok{background:rgba(255,255,255,.12);color:#fff}.syncbadge.pend{background:#a85f00;color:#fff}.syncbadge.err{background:#b3261e;color:#fff}
 .hdr-right{display:flex;gap:8px;align-items:center}
-.userchip{font-size:12px;font-weight:700;border-radius:6px;padding:4px 8px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.userchip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;border-radius:10px;padding:6px 10px;border:1px solid rgba(255,255,255,.55);background:transparent;color:inherit;cursor:pointer;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 main{flex:1;padding:16px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px));max-width:720px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:16px}
 section.view{display:flex;flex-direction:column;gap:14px}
 h2{font-size:20px;margin:0;text-wrap:balance}
@@ -126,8 +132,9 @@ nav.tabs button.scan span.ic{background:var(--accent);border-radius:12px;padding
 .thumb{width:100%;max-height:220px;object-fit:contain;border-radius:8px;background:#000}
 .loginscr{position:fixed;inset:0;z-index:55;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:auto;padding:16px}
 .loginbox{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 18px;display:flex;flex-direction:column;gap:12px}
-.loginlogo{width:56px;height:56px;border-radius:14px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center}
-.loginlogo svg{width:32px;height:32px}
+.loginlogo{width:84px;height:84px;align-self:center;margin-bottom:2px}
+.loginlogo svg{width:84px;height:84px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.2))}
+#lgTit{text-align:center}
 .urow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
 .urow .actions{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
 .chk{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
@@ -172,7 +179,22 @@ table.rg td{border:1px solid var(--line);padding:6px}
 .salagh{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:800;color:var(--ink-2)}
 .lnk{border:0;background:none;color:var(--accent);font-weight:800;font-size:13px;cursor:pointer;padding:4px}
 .selit.apag{opacity:.45}
-.semcam .row .btn{min-height:96px;font-size:19px}
+.bcard{border-radius:16px;padding:16px;gap:12px;box-shadow:0 1px 3px rgba(23,63,53,.06)}
+.bhd{display:flex;align-items:center;gap:12px}
+.bic{width:44px;height:44px;border-radius:50%;background:#e6efea;color:var(--ink);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.bic svg{width:22px;height:22px}
+.bhd h3{font-size:14px;color:var(--ink);font-weight:700;letter-spacing:.06em}
+.btxt{color:var(--muted);font-size:15px}.btxt b{color:var(--ink)}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:14px;min-height:132px;padding:16px 14px;border:0;border-radius:12px;background:#e6efea;color:var(--ink);text-align:left;cursor:pointer;font:inherit}
+.tile:active{filter:brightness(.95)}
+.tic{width:52px;height:52px;border-radius:50%;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center}
+.tic svg{width:26px;height:26px}
+.tile .chev{position:absolute;right:14px;top:30px;width:18px;height:18px}
+.tile .tt{font-size:18px;font-weight:800;line-height:1.2}
+.ult{font-size:16px;line-height:1.5}.ult b{font-size:18px}
+.ultd{border-top:1px solid var(--line);padding-top:10px;color:var(--muted);font-size:14px;display:flex;align-items:center;gap:4px}
+.ultd svg{width:15px;height:15px}
 .reader-wrap[hidden]{display:none}
 .seqcmp{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;text-align:center}
 .seqbox{border:1.5px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column}.seqbox b{font-family:var(--f-code);font-size:19px}.seqbox small{font-size:12px;color:var(--muted)}
@@ -183,7 +205,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
 <body>
 <div class="app">
   <header class="top">
-    <div class="brand"><b>LASDM · Amostras</b><small>Arquivo refrigerado</small></div>
+    <div class="brand"><svg class="logo" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48" fill="#0f5c36"/><circle cx="50" cy="50" r="44" fill="#f4d21f"/><path d="M50 30c-21 0-33 9-33 21s12 21 33 21c13 0 22-3 28-9a7 7 0 010-24c-6-6-15-9-28-9z" fill="#13703f"/><path d="M42 36h11c11 0 16 6 14 15-2 10-9 15-20 15H36l6-30zm8 7l-3 16h3c6 0 9-3 10-8 1-5-1-8-6-8h-4z" fill="#fff"/></svg><div><b>LASDM · Amostras</b><small>Arquivo refrigerado</small></div></div>
     <div class="hdr-right"><button class="syncbadge" id="syncBadge" hidden></button><button class="userchip" id="userChip" hidden></button></div>
   </header>
 
@@ -191,7 +213,12 @@ table.rg td{border:1px solid var(--line);padding:6px}
     <!-- BIPAR -->
     <section class="view" id="v-bipar">
       <div class="banner" id="ctxBanner" hidden></div>
-      <div class="card" id="biparIntro" hidden><h3>Registrar amostra</h3><div class="small">Tire a <b>foto da etiqueta</b> (com o texto Prot./Rem. bem visível) ou <b>digite o protocolo</b>. O app lê, confere com as planilhas e abre a ficha.</div></div>
+      <div class="card bcard" id="biparIntro"><div class="bhd"><span class="bic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></span><h3>Registrar amostra</h3></div>
+        <div class="btxt">Tire a <b>foto da etiqueta</b> (com o texto Prot./Rem. bem visível) ou <b>digite o protocolo</b>. O app lê, confere com as planilhas e abre a ficha.</div>
+        <div class="tiles">
+          <label class="tile" for="fotoEtq"><span class="tic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg><span class="tt">Foto da etiqueta</span></label>
+          <button class="tile" id="btnManual"><span class="tic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M10.3 10h.01M13.7 10h.01M17 10h.01M8 14h8" stroke-linecap="round"/></svg></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg><span class="tt">Digitar protocolo</span></button>
+        </div></div>
       <div class="reader-wrap" id="readerWrap">
         <video id="video" playsinline muted hidden></video>
         <div class="aim" id="aim" hidden></div>
@@ -205,8 +232,6 @@ table.rg td{border:1px solid var(--line);padding:6px}
       </div>
       <div class="row">
         <button class="btn ghost" id="btnStop" hidden>Parar câmera</button>
-        <label class="btn sec" style="cursor:pointer" for="fotoEtq">Foto da etiqueta</label>
-        <button class="btn sec" id="btnManual">Digitar protocolo</button>
       </div>
       <input type="file" id="fotoEtq" accept="image/*" capture="environment" hidden>
       <div class="card" id="camHelp" hidden></div>
@@ -274,7 +299,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27p</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27q</div>
     </section>
   </main>
 
@@ -291,7 +316,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
 <div id="printArea"></div>
 <div class="loginscr" id="loginScr">
   <form class="loginbox" id="loginForm" autocomplete="on">
-    <div class="loginlogo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3"/></svg></div>
+    <div class="loginlogo"><svg class="logo" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48" fill="#0f5c36"/><circle cx="50" cy="50" r="44" fill="#f4d21f"/><path d="M50 30c-21 0-33 9-33 21s12 21 33 21c13 0 22-3 28-9a7 7 0 010-24c-6-6-15-9-28-9z" fill="#13703f"/><path d="M42 36h11c11 0 16 6 14 15-2 10-9 15-20 15H36l6-30zm8 7l-3 16h3c6 0 9-3 10-8 1-5-1-8-6-8h-4z" fill="#fff"/></svg></div>
     <h2 id="lgTit">LASDM · Amostras</h2>
     <div class="small" id="lgSub">Rastreabilidade das amostras do arquivo refrigerado. Entre com o seu usuário e senha.</div>
     <label class="f" id="lgNomeBox" hidden>Seu nome<input type="text" id="lgNome" autocomplete="name"></label>
@@ -510,7 +535,7 @@ $('#btnStart').onclick = startCam;
 /* Leitura do QR pela câmera ao vivo: desligada no layout por enquanto (o código continua no app).
    Para reativar, troque para true. A foto da etiqueta continua usando o QR para achar o texto. */
 const CAMERA_AO_VIVO = false;
-if(!CAMERA_AO_VIVO){ $('#readerWrap').hidden = true; $('#btnStop').hidden = true; $('#biparIntro').hidden = false; document.querySelector('#v-bipar').classList.add('semcam'); }
+if(!CAMERA_AO_VIVO){ $('#readerWrap').hidden = true; $('#btnStop').hidden = true; document.querySelector('#v-bipar').classList.add('semcam'); }
 $('#btnStop').onclick = stopCam;
 $('#btnTorch').onclick = async () => { try{ torch = !torch; await stream.getVideoTracks()[0].applyConstraints({ advanced:[{ torch }] }); $('#btnTorch').textContent = torch?'Lanterna ✓':'Lanterna'; }catch(e){ toast('Lanterna indisponível neste aparelho.'); } };
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden) stopCam(); });
@@ -1046,7 +1071,8 @@ function renderUltimo(){
   const m = db.mov[db.mov.length-1], el = $('#lastCard');
   if(!m){ el.hidden = true; return; }
   el.hidden = false;
-  el.innerHTML = `<h3>Último movimento deste aparelho</h3><div><b class="mono">${esc(m.protocolo)}</b> · ${esc(NOME_ACAO[m.acao]||m.acao)}${m.posicao?' · <span class="mono">'+esc(m.posicao)+'</span>':''}${m.acao==='SALA'?' · '+esc(m.destino):''}</div><div class="small">${esc(m.data)} ${esc(m.hora.slice(0,5))} · ${m.enviado?'enviado ✓':'na fila'}</div>`;
+  el.classList.add('bcard');
+  el.innerHTML = `<div class="bhd"><span class="bic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 12a9 9 0 103-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></span><h3>Último movimento deste aparelho</h3></div><div class="ult"><b class="mono">${esc(m.protocolo)}</b> · ${esc(NOME_ACAO[m.acao]||m.acao)}${m.posicao?' · <span class="mono">'+esc(m.posicao)+'</span>':''}${m.acao==='SALA'?' · '+esc(m.destino):''}</div><div class="ultd">${esc(m.data)} ${esc(m.hora.slice(0,5))} · ${m.enviado?'enviado <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 12l5 5 9-10"/></svg>':'na fila'}</div>`;
 }
 
 /* perfil de cada andar (A.04 em cima, como na prateleira física) */
@@ -1452,7 +1478,7 @@ function renderSync(){
   if(syncando){ b.className='syncbadge'; b.textContent='Sincronizando…'; }
   else if(syncErro){ b.className='syncbadge err'; b.textContent='Planilha: erro'; }
   else if(n){ b.className='syncbadge pend'; b.textContent=n+' na fila'; }
-  else { b.className='syncbadge ok'; b.textContent='Sincronizado ✓'; }
+  else { b.className='syncbadge ok'; b.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 18h10a4 4 0 00.6-8A6 6 0 006.2 9 4.5 4.5 0 007 18z"/></svg>Sincronizado ✓'; }
   if(info) info.textContent = `Na fila deste aparelho: ${n}\nMovimentos de todos os aparelhos: ${REMOTO.movimentos.length}` + (syncUltimo?`\nÚltima sincronização: ${hora(new Date(syncUltimo)).slice(0,5)}`:'') + (!navigator.onLine?'\nSem internet: envio quando a conexão voltar.':'') + (syncErro?`\nErro: ${syncErro}`:'');
 }
 $('#syncBadge').onclick = () => show('mais');
@@ -1479,7 +1505,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27p' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27p' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27q' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27q' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -1521,7 +1547,7 @@ $('#loginForm').onsubmit = async e => {
   }catch(err){ msgLogin(err.message || String(err)); }
   finally{ btn.disabled = false; btn.textContent = modoLogin==='admin' ? 'Criar administrador' : 'Entrar'; }
 };
-function renderUsuario(){ const c = $('#userChip'); if(!SESSAO){ c.hidden = true; return; } c.hidden = false; c.textContent = SESSAO.nome.split(' ')[0] + ' ▾'; }
+function renderUsuario(){ const c = $('#userChip'); if(!SESSAO){ c.hidden = true; return; } c.hidden = false; c.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg><span>' + esc(SESSAO.nome.split(' ')[0]) + '</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M7 10l5 5 5-5"/></svg>'; }
 function sair(){ stopCam(); $('#sheetHost').innerHTML=''; iniciarLogin(); }
 $('#userChip').onclick = () => { sheet(`<h2>${esc(SESSAO.nome)}</h2><div class="small">Usuário: <b>${esc(SESSAO.usuario)}</b> · ${esc(SESSAO.perfil)}${SESSAO.offline?' · entrou sem internet':''}</div><div class="row"><button class="btn ghost" id="uFechar">Fechar</button><button class="btn danger" id="uSair">Sair</button></div>`); $('#uFechar').onclick = fecharSheet; $('#uSair').onclick = sair; };
 let escondidoEm = 0;

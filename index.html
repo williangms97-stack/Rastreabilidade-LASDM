@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.27c"></script>
+<script src="regras.js?v=2026.10.27d"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27c'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27d'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -254,7 +254,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27c</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27d</div>
     </section>
   </main>
 
@@ -818,10 +818,11 @@ function desenharAcoes(c){
     h += `<div class="posbig"><small>Voltar para a posição reservada</small>${esc(L.textoSlot(e.slot, e.embalagem))}</div><button class="btn" data-acao="RETORNO">Retornar ao arquivo</button>`;
   } else if(emSala){
     // volta para a PILHA de onde saiu (mesma prateleira, andar, linha e lado), no topo dela — as de cima já desceram quando ela saiu
-    let sug = null, origem = false;
+    // volta para a MESMA posição de onde saiu: as caixinhas que desceram sobem de novo uma posição
+    let sug = null, origem = false; c.inserir = null;
     const ant = e.slotAnterior, pr = ant && prateleiras().find(x=>x.numero===ant.prateleira);
-    if(ant && pr){ const alt = L.dimPrat(pr).alturas;
-      for(let hh=1; hh<=alt; hh++){ const sl = Object.assign({}, ant, { altura:hh }); if(!L.validarPosicao(a, c.emb, sl, EST, prateleiras(), a.protocolo).length){ sug = { slot:sl, motivo:'Pilha de origem (saiu de ' + L.textoSlot(ant, e.embalagem) + '); vai no topo, porque as de cima desceram' }; origem = true; break; } } }
+    if(ant && pr){ const ins = posicaoOrigem(a, c.emb, ant, pr);
+      if(ins){ sug = { slot:ins.slot, motivo: ins.sobem.length ? (ins.sobem.length===1?'1 caixinha sobe':ins.sobem.length+' caixinhas sobem') + ' uma posição para ela voltar ao lugar: ' + ins.sobem.map(x=>x.e.protocolo).join(', ') : 'Mesma posição de onde saiu' }; origem = true; c.inserir = ins; } }
     if(!sug){ sug = L.sugerirPosicao(a, c.emb, EST, prateleiras(), a.protocolo); if(ant && sug.slot) sug.motivo = 'A pilha de origem (' + L.textoSlot(ant, e.embalagem) + ') está cheia ou não aceita esta amostra; ' + sug.motivo; }
     c.sug = sug.slot;
     h += sug.slot ? `<div class="posbig"><small>${origem ? 'Retornar ao local de origem' : 'Retornar ao arquivo em'}</small>${esc(L.textoSlot(sug.slot, c.emb))}<small>${esc(sug.motivo)}</small></div>
@@ -837,7 +838,7 @@ function desenharAcoes(c){
     const b = ev.target.closest('button'); if(!b) return;
     if(b.dataset.sala!=null) return registrar(c, 'SALA', { destino: L.SALAS[+b.dataset.sala] });
     const ac = b.dataset.acao;
-    if(ac==='ARMAZENAR') return registrar(c, 'ARMAZENAR', { slot:c.sug });
+    if(ac==='ARMAZENAR') return registrar(c, 'ARMAZENAR', { slot:c.sug, inserir:c.inserir });
     if(ac==='RETORNO') return registrar(c, 'RETORNO', { slot:e.slot });
     if(ac==='REGISTRO') return registrar(c, 'REGISTRO', {});
     if(ac==='BAIXA'){ if(confirm('Dar baixa na amostra '+a.protocolo+'? Ela sai do arquivo e a posição fica livre.')) registrar(c, 'BAIXA', {}); return; }
@@ -845,6 +846,20 @@ function desenharAcoes(c){
     if(ac==='NOVAPRAT') return novaPrateleira(c.emb, () => abrirAmostra(a.protocolo, c.ctx));
     if(ac==='PUREZA') return abrirAmostra(L.chaveItem(a.protocolo, true), Object.assign({}, c.ctx, { escolhido:true }));
   };
+}
+/* Retorno à posição de origem: mesma pilha e mesma altura. As caixinhas que hoje estão nessa altura ou acima
+   (desceram quando ela saiu) sobem uma posição. Só quando a pilha tem espaço e o perfil do andar aceita a amostra. */
+function posicaoOrigem(a, emb, ant, pr){
+  const E = L.dimPrat(pr), mesmaMetade = x => x.slot && x.status==='ARQUIVO' && x.protocolo!==a.protocolo && x.slot.prateleira===ant.prateleira && x.slot.andar===ant.andar && x.slot.linha===ant.linha && String(x.slot.lado).charAt(0)===String(ant.lado).charAt(0);
+  const metade = Object.values(EST).filter(mesmaMetade);
+  if(metade.some(x=>x.slot.lado!==ant.lado)) return null;   // metade com 1 kg e 0,5 kg misturadas: usa o topo (regra geral)
+  const pilha = metade.sort((x,y)=>x.slot.altura-y.slot.altura);
+  if(pilha.length >= E.alturas) return null;                  // pilha cheia
+  const alvo = Math.min(ant.altura, pilha.length + 1), slot = Object.assign({}, ant, { altura:alvo });
+  // perfil/embalagem: testa como se fosse no topo livre da pilha (o apoio é garantido porque as de baixo não mudaram)
+  if(L.validarPosicao(a, emb, Object.assign({}, ant, { altura:pilha.length + 1 }), EST, prateleiras(), a.protocolo).length) return null;
+  const sobem = pilha.filter(x=>x.slot.altura>=alvo).map(x=>({ e:x, de:x.slot, para:Object.assign({}, x.slot, { altura:x.slot.altura + 1 }) }));
+  return { slot, sobem };
 }
 function escolherPosicao(c, acao){
   // a caixinha de 0,5 kg pode ir também nas prateleiras de 1 kg (com o endereçamento delas)
@@ -882,7 +897,8 @@ async function registrar(c, acao, op){
   const { a } = c, cls = L.classificar(a), agora = new Date();
   const atual = EST[a.protocolo];
   if(acao==='ARMAZENAR' && atual && atual.slot && (atual.status==='ARQUIVO' || atual.status==='SALA')){ toast(`${a.protocolo} já está emblocado em ${L.textoSlot(atual.slot, atual.embalagem)}. Um protocolo não pode ser emblocado duas vezes.`); return; }
-  if(op.slot){ const m = L.validarPosicao(a, c.emb, op.slot, EST, prateleiras(), a.protocolo); if(m.length && acao!=='RETORNO'){ toast(m[0]); return; } }
+  const ins = op.inserir && op.slot && op.inserir.slot === op.slot ? op.inserir : null;
+  if(op.slot && !ins){ const m = L.validarPosicao(a, c.emb, op.slot, EST, prateleiras(), a.protocolo); if(m.length && acao!=='RETORNO'){ toast(m[0]); return; } }
   const m = {
     id: uid(), ts: agora.getTime(), data: br(agora), hora: hora(agora), protocolo: a.protocolo, acao, destino: op.destino || (op.slot ? 'Arquivo refrigerado' : acao==='BAIXA' ? 'Baixa' : ''),
     prateleira: op.slot ? op.slot.prateleira : '', andar: op.slot ? op.slot.andar : '', linha: op.slot ? op.slot.linha : '', lado: op.slot ? op.slot.lado : '', altura: op.slot ? op.slot.altura : '',
@@ -892,6 +908,14 @@ async function registrar(c, acao, op){
     usuario: quem(), aparelho: navigator.userAgent.slice(0,60), temFoto: !!c.ctx.foto, enviado: false
   };
   if(c.ctx.foto){ await fotoPut(m.id, c.ctx.foto); c.ctx.foto = null; }   // a foto vai só no primeiro movimento da leitura
+  // volta à posição de origem: primeiro as de cima sobem (da mais alta para a mais baixa), depois ela entra no lugar
+  const subiram = ins ? ins.sobem.slice().sort((x,y)=>y.de.altura-x.de.altura) : [];
+  subiram.forEach((d, i)=>{ const e = d.e;
+    db.mov.push({ id: uid(), ts: m.ts - subiram.length + i, data: m.data, hora: m.hora, protocolo: e.protocolo, acao: 'REMANEJAR', destino: 'Arquivo refrigerado',
+      prateleira: d.para.prateleira, andar: d.para.andar, linha: d.para.linha, lado: d.para.lado, altura: d.para.altura, posicao: L.textoSlot(d.para, e.embalagem),
+      embalagem: e.embalagem || '', classificacao: e.classificacao || '', especie: e.especie || '', cultivar: e.cultivar || '', lote: e.lote || '', produtor: e.produtor || '',
+      tipoAnalise: e.tipoAnalise || '', remessa: e.remessa || '', tratamento: e.tratamento || '', categoria: e.categoria || '', validacao: '', lido: '',
+      obs: `Subiu automaticamente: ${a.protocolo} voltou para ${L.textoSlot(op.slot, c.emb)}`, usuario: quem(), aparelho: navigator.userAgent.slice(0,60), temFoto: false, enviado: false }); });
   db.mov.push(m);
   pendencias().filter(x=>x.protocolo===a.protocolo).forEach(x=>x.resolvido = true);
   save(); recompute();
@@ -909,10 +933,10 @@ async function registrar(c, acao, op){
     if(desceram.length){ save(); recompute(); }
   }
   sincronizar();
-  movimentoOk(m, desceram);
+  movimentoOk(m, desceram, subiram);
 }
 const NOME_ACAO = { ARMAZENAR:'Armazenada no arquivo', RETORNO:'Retornou ao arquivo', REMANEJAR:'Posição alterada', SALA:'Enviada para sala', BAIXA:'Baixa registrada', REGISTRO:'Entrada registrada (não armazena)' };
-function movimentoOk(m, desceram){
+function movimentoOk(m, desceram, subiram){
   beep(true);
   const host = $('#sheetHost');
   host.innerHTML = `<div class="sheet-bg" id="okBg" style="align-items:center"><div class="okbox">
@@ -921,6 +945,7 @@ function movimentoOk(m, desceram){
     <div class="mono" style="font-size:20px;font-weight:700">${esc(m.protocolo)}</div>
     ${m.posicao?`<div class="posbig" style="width:100%">${esc(m.posicao)}<small>${esc(L.nomeEmb(m.embalagem))}</small></div>`:''}
     ${m.acao==='SALA'?`<div class="posbig" style="width:100%;font-family:var(--f-ui)">${esc(m.destino)}</div>`:''}
+    ${subiram && subiram.length?`<div class="alert warn" style="width:100%;text-align:left"><b>Voltou para a posição de origem.</b> ${subiram.length===1?'1 caixinha subiu':subiram.length+' caixinhas subiram'} uma posição:<br>${subiram.map(d=>`<span class="mono">${esc(d.e.protocolo)}</span>: ${esc(L.nomeAltura(d.e.embalagem, d.de.altura))} → <b>${esc(L.nomeAltura(d.e.embalagem, d.para.altura))}</b>`).join('<br>')}</div>`:''}
     ${desceram && desceram.length?`<div class="alert warn" style="width:100%;text-align:left"><b>${desceram.length===1?'1 caixinha desceu':desceram.length+' caixinhas desceram'} uma posição</b> (a de baixo foi retirada). Endereços atualizados:<br>${desceram.map(d=>`<span class="mono">${esc(d.e.protocolo)}</span>: ${esc(L.nomeAltura(d.e.embalagem, d.de.altura))} → <b>${esc(L.nomeAltura(d.e.embalagem, d.para.altura))}</b>`).join('<br>')}<br><span class="small">Reimprima a etiqueta da linha se as faixas mudaram.</span></div>`:''}
     <button class="btn" id="okVoltar" style="width:100%">Bipar próxima</button></div></div>`;
   const voltar = () => { host.innerHTML=''; if(viewAtual!=='bipar') show('bipar'); else { resumeCam(); renderUltimo(); } };
@@ -1188,7 +1213,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27c' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27c' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27d' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27d' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

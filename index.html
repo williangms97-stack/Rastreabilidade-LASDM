@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.27e"></script>
+<script src="regras.js?v=2026.10.27f"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27e'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27f'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -254,7 +254,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27e</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27f</div>
     </section>
   </main>
 
@@ -309,6 +309,8 @@ function load(){
   try{ db = JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){ db = {}; }
   db = Object.assign({ url:URL_PLANILHA, mov:[], filaPrat:[], prateleiras:[], credenciais:{}, ultimoUsuario:'', embPadrao:'CX1', vinculos:{}, refEm:0 }, db);
   if(URL_PLANILHA) db.url = URL_PLANILHA;   // endereço fixo: nenhum aparelho precisa digitar
+  // versões antigas gravavam o vínculo QR → protocolo já na leitura (mesmo se o OCR errasse): limpa; os vínculos válidos vêm dos movimentos registrados
+  if(db.vincVer !== 2){ db.vinculos = {}; db.vincVer = 2; }
 }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){ toast('Memória do aparelho cheia: sincronize e libere espaço.'); } }
 
@@ -624,7 +626,7 @@ async function processarEtiqueta({ qr, bmp, cantos }){
     }
   }catch(err){ erroOcr = err.message || String(err); }
   if(!prot) prot = lido.prot ? L.chaveItem(lido.prot, lido.pureza) : '';
-  if(codigo && prot && !peloQR){ db.vinculos[codigo] = prot; save(); }
+  // o vínculo QR → protocolo só é gravado quando a amostra é registrada (assim uma leitura errada não fica "presa" ao QR)
   aguarde('');
   const ctx = { foto, lido, qr, codigo, bruto, erroOcr, peloQR };
   // Pureza: o protocolo é escrito à mão → sempre confirmar o número antes de abrir
@@ -644,7 +646,7 @@ function abrirDigitar(ctx={}){
   $('#dgCancel').onclick = fecharSheet;
   $('#dgTipo').onclick = ev => { const b = ev.target.closest('[data-v]'); if(!b) return; $('#dgTipo').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); $('#dgProt').focus(); };
   const ok = async () => { const tipo = $('#dgTipo').querySelector('[aria-pressed=true]').dataset.v; let p = L.normProt($('#dgProt').value); if(!p){ toast('Protocolo inválido.'); return; }
-    p = tipo==='M' ? 'M' + L.protBase(p).replace(/^M/i,'') : L.chaveItem(p.replace(/^M/i,''), tipo==='P'); if(ctx.codigo){ db.vinculos[ctx.codigo] = p; save(); } await abrirAmostra(p, Object.assign(ctx, { digitado:true })); };
+    p = tipo==='M' ? 'M' + L.protBase(p).replace(/^M/i,'') : L.chaveItem(p.replace(/^M/i,''), tipo==='P'); await abrirAmostra(p, Object.assign(ctx, { digitado:true })); };
   $('#dgOk').onclick = ok; $('#dgProt').onkeydown = e=>{ if(e.key==='Enter') ok(); };
 }
 $('#btnManual').onclick = () => abrirDigitar();
@@ -675,7 +677,7 @@ async function abrirAmostra(prot, ctx={}){
   const cf = manual ? { prot, ref: await buscarRef(L.protBase(prot)) } : await conferirProtocolo(L.protBase(prot), ctx.lido, ctx.escolhido);
   cf.prot = L.chaveItem(cf.prot, pureza);
   ctx.opcoes = cf.opcoes || cf.outros || null; ctx.lidoProt = ctx.lidoProt || (ctx.lido && ctx.lido.prot);
-  if(cf.corrigido){ prot = cf.prot; ctx.corrigido = cf.corrigido; if(ctx.codigo){ db.vinculos[ctx.codigo] = prot; save(); } }
+  if(cf.corrigido){ prot = cf.prot; ctx.corrigido = cf.corrigido; }
   else prot = cf.prot;
   const ref = cf.ref, refDup = ref && /^N[ÚU]MERO REPETIDO/i.test(ref.obs||'');
   recompute();
@@ -917,6 +919,7 @@ async function registrar(c, acao, op){
       embalagem: e.embalagem || '', classificacao: e.classificacao || '', especie: e.especie || '', cultivar: e.cultivar || '', lote: e.lote || '', produtor: e.produtor || '',
       tipoAnalise: e.tipoAnalise || '', remessa: e.remessa || '', tratamento: e.tratamento || '', categoria: e.categoria || '', validacao: '', lido: '',
       obs: `Subiu automaticamente: ${a.protocolo} voltou para ${L.textoSlot(op.slot, c.emb)}`, usuario: quem(), aparelho: navigator.userAgent.slice(0,60), temFoto: false, enviado: false }); });
+  if(c.ctx.codigo && !L.ehPureza(a.protocolo)){ db.vinculos[c.ctx.codigo] = a.protocolo; }   // agora sim: QR confirmado para este protocolo
   db.mov.push(m);
   pendencias().filter(x=>x.protocolo===a.protocolo).forEach(x=>x.resolvido = true);
   save(); recompute();
@@ -1214,7 +1217,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27e' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27e' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27f' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27f' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

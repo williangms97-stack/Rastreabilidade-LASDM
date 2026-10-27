@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.27n"></script>
+<script src="regras.js?v=2026.10.27o"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27n'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27o'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -174,6 +174,9 @@ table.rg td{border:1px solid var(--line);padding:6px}
 .selit.apag{opacity:.45}
 .semcam .row .btn{min-height:96px;font-size:19px}
 .reader-wrap[hidden]{display:none}
+.seqcmp{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;text-align:center}
+.seqbox{border:1.5px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column}.seqbox b{font-family:var(--f-code);font-size:19px}.seqbox small{font-size:12px;color:var(--muted)}
+.seqbox.bad{border-color:var(--bad);background:var(--bad-bg)}.seqbox.bad b{color:var(--bad)}.seqbox.warn{border-color:var(--warn);background:var(--warn-bg)}.seqbox.warn b{color:var(--warn)}.seqarr{font-size:22px}
 </style>
 </head>
 <body>
@@ -270,7 +273,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27n</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27o</div>
     </section>
   </main>
 
@@ -929,6 +932,36 @@ function escolherPosicao(c, acao){
   $('#epVoltar').onclick = () => telaAmostra(c);
   $('#epOk').onclick = () => registrar(c, acao, { slot:slot() });
 }
+/* Sequência dos protocolos: acha a amostra que fica logo ANTES desta posição na ordem de emblocamento
+   (mesma prateleira e andar: linha 1→N, Trás antes da Frente, de baixo para cima). */
+function ordemPos(s){ const sub = { T2:0, T:0, T1:1, F2:2, F:2, F1:3 }; return ((s.linha*4 + (sub[s.lado]!=null ? sub[s.lado] : 0)) * 100) + s.altura; }
+function protocoloAnterior(slot, prot){
+  const alvo = ordemPos(slot); let ant = null;
+  Object.values(EST).forEach(e=>{ const s = e.slot; if(!s || e.status!=='ARQUIVO' || e.protocolo===prot || s.prateleira!==slot.prateleira || s.andar!==slot.andar) return;
+    const o = ordemPos(s); if(o < alvo && (!ant || o > ant.o)) ant = { e, o }; });
+  return ant && ant.e;
+}
+function foraDeSequencia(prot, slot){
+  const ant = protocoloAnterior(slot, prot); if(!ant || L.tipoItem(ant.protocolo)!==L.tipoItem(prot)) return null;
+  const a = [L.protAno(ant.protocolo), L.protNum(ant.protocolo)], b = [L.protAno(prot), L.protNum(prot)];
+  if(b[0] < a[0] || (b[0]===a[0] && b[1] < a[1])) return { ant, tipo:'menor' };            // menor que o anterior
+  if(b[0]===a[0] && b[1] > a[1] + 1){ const n1 = a[1]+1, n2 = b[1]-1, M = L.ehManual(prot) ? 'M ' : '';   // pulou números
+    return { ant, tipo:'pulou', faltam: n2-n1+1 <= 5 ? Array.from({length:n2-n1+1},(_,i)=>M+(n1+i)).join(', ') : `de ${M}${n1} a ${M}${n2}` }; }
+  return null;
+}
+// pergunta na tela (Sim / Não); "Não" volta para a ficha da amostra
+function perguntarSequencia(fs, prot, slot, emb){
+  return new Promise(res => {
+    const menor = fs.tipo==='menor', cor = menor ? 'bad' : 'warn';
+    sheet(`<h2>Protocolo fora de sequência</h2>
+      <div class="seqcmp"><div class="seqbox"><small>anterior na sequência</small><b>${esc(fs.ant.protocolo)}</b><small>${esc('L.'+L.p2(fs.ant.slot.linha)+' · '+L.nomeLado(fs.ant.slot.lado)+' · '+L.nomeAltura(fs.ant.embalagem, fs.ant.slot.altura))}</small></div><div class="seqarr">→</div>
+        <div class="seqbox ${cor}"><small>este</small><b>${esc(prot)}</b><small>${esc('L.'+L.p2(slot.linha)+' · '+L.nomeLado(slot.lado)+' · '+L.nomeAltura(emb, slot.altura))}</small></div></div>
+      <div class="alert warn">${menor ? `O protocolo <b>${esc(prot)}</b> é <b>menor</b> que o anterior (<b>${esc(fs.ant.protocolo)}</b>). A sequência do andar deveria ir do menor para o maior.`
+        : `A sequência <b>pulou</b> de <b>${esc(fs.ant.protocolo)}</b> para <b>${esc(prot)}</b> (ficaram de fora: ${esc(fs.faltam)}).`}<br><br>Deseja emblocar mesmo assim em <b>${esc(L.textoSlot(slot, emb))}</b>?</div>
+      <button class="btn" id="sqSim">Sim, emblocar mesmo assim</button><button class="btn ghost" id="sqNao">Não, voltar</button>`);
+    $('#sqSim').onclick = () => res(true); $('#sqNao').onclick = () => res(false);
+  });
+}
 let ultimoTs = 0;
 async function registrar(c, acao, op, silencioso){
   const { a } = c, cls = L.classificar(a), agora = new Date();
@@ -937,6 +970,9 @@ async function registrar(c, acao, op, silencioso){
   if(acao==='ARMAZENAR' && atual && atual.slot && (atual.status==='ARQUIVO' || atual.status==='SALA')) return falha(`${a.protocolo} já está emblocado em ${L.textoSlot(atual.slot, atual.embalagem)}. Um protocolo não pode ser emblocado duas vezes.`);
   const ins = op.inserir && op.slot && op.inserir.slot === op.slot ? op.inserir : null;
   if(op.slot && !ins){ const m = L.validarPosicao(a, c.emb, op.slot, EST, prateleiras(), a.protocolo); if(m.length && acao!=='RETORNO') return falha(m[0]); }
+  // protocolo menor que o anterior na sequência do andar: pergunta antes (o retorno à posição de origem não pergunta)
+  if(!silencioso && op.slot && !ins && (acao==='ARMAZENAR' || acao==='REMANEJAR')){ const ant = foraDeSequencia(a.protocolo, op.slot);
+    if(ant && !(await perguntarSequencia(ant, a.protocolo, op.slot, c.emb))){ telaAmostra(c); return; } }
   // horários sempre crescentes (vários registros no mesmo segundo, ex.: seleção de várias amostras)
   const tsBase = Math.max(agora.getTime(), ultimoTs + 80); ultimoTs = tsBase + 40;
   const m = {
@@ -1417,7 +1453,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27n' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27n' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27o' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27o' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

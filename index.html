@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.27b"></script>
+<script src="regras.js?v=2026.10.27c"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27c'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -254,7 +254,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27b</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27c</div>
     </section>
   </main>
 
@@ -817,8 +817,15 @@ function desenharAcoes(c){
   if(emSala && e.slot){
     h += `<div class="posbig"><small>Voltar para a posição reservada</small>${esc(L.textoSlot(e.slot, e.embalagem))}</div><button class="btn" data-acao="RETORNO">Retornar ao arquivo</button>`;
   } else if(emSala){
-    const sug = L.sugerirPosicao(a, c.emb, EST, prateleiras(), a.protocolo); c.sug = sug.slot;
-    h += sug.slot ? `<div class="posbig"><small>Retornar ao arquivo em</small>${esc(L.textoSlot(sug.slot, c.emb))}</div><button class="btn" data-acao="ARMAZENAR">Retornar ao arquivo</button>` : `<div class="alert bad">${esc(sug.motivo)}</div>`;
+    // volta para a PILHA de onde saiu (mesma prateleira, andar, linha e lado), no topo dela — as de cima já desceram quando ela saiu
+    let sug = null, origem = false;
+    const ant = e.slotAnterior, pr = ant && prateleiras().find(x=>x.numero===ant.prateleira);
+    if(ant && pr){ const alt = L.dimPrat(pr).alturas;
+      for(let hh=1; hh<=alt; hh++){ const sl = Object.assign({}, ant, { altura:hh }); if(!L.validarPosicao(a, c.emb, sl, EST, prateleiras(), a.protocolo).length){ sug = { slot:sl, motivo:'Pilha de origem (saiu de ' + L.textoSlot(ant, e.embalagem) + '); vai no topo, porque as de cima desceram' }; origem = true; break; } } }
+    if(!sug){ sug = L.sugerirPosicao(a, c.emb, EST, prateleiras(), a.protocolo); if(ant && sug.slot) sug.motivo = 'A pilha de origem (' + L.textoSlot(ant, e.embalagem) + ') está cheia ou não aceita esta amostra; ' + sug.motivo; }
+    c.sug = sug.slot;
+    h += sug.slot ? `<div class="posbig"><small>${origem ? 'Retornar ao local de origem' : 'Retornar ao arquivo em'}</small>${esc(L.textoSlot(sug.slot, c.emb))}<small>${esc(sug.motivo)}</small></div>
+      <div class="row"><button class="btn" data-acao="ARMAZENAR">Retornar ao arquivo</button><button class="btn ghost" data-acao="ESCOLHER">Outra posição</button></div>` : `<div class="alert bad">${esc(sug.motivo)}</div>`;
   }
   if(noArquivo || (emSala && e.slot)) h = `<div class="small">${L.ehManual(a.protocolo)?'Amostra manual':'Protocolo'} já emblocado: existe uma única caixinha/saquinho por protocolo.</div>` + h;
   if((noArquivo || emSala) && !L.ehManual(a.protocolo) && !L.ehPureza(a.protocolo)) h += `<button class="btn ghost sm" data-acao="PUREZA">É a Pureza deste protocolo? Registrar o saco de Pureza</button>`;
@@ -1181,7 +1188,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27c' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27c' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

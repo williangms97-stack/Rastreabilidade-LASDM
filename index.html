@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.27m"></script>
+<script src="regras.js?v=2026.10.27n"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27m'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27n'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -172,6 +172,8 @@ table.rg td{border:1px solid var(--line);padding:6px}
 .salagh{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:800;color:var(--ink-2)}
 .lnk{border:0;background:none;color:var(--accent);font-weight:800;font-size:13px;cursor:pointer;padding:4px}
 .selit.apag{opacity:.45}
+.semcam .row .btn{min-height:96px;font-size:19px}
+.reader-wrap[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -185,7 +187,8 @@ table.rg td{border:1px solid var(--line);padding:6px}
     <!-- BIPAR -->
     <section class="view" id="v-bipar">
       <div class="banner" id="ctxBanner" hidden></div>
-      <div class="reader-wrap">
+      <div class="card" id="biparIntro" hidden><h3>Registrar amostra</h3><div class="small">Tire a <b>foto da etiqueta</b> (com o texto Prot./Rem. bem visível) ou <b>digite o protocolo</b>. O app lê, confere com as planilhas e abre a ficha.</div></div>
+      <div class="reader-wrap" id="readerWrap">
         <video id="video" playsinline muted hidden></video>
         <div class="aim" id="aim" hidden></div>
         <div class="camtools" id="camTools" hidden><button id="btnTorch" hidden>Lanterna</button></div>
@@ -267,7 +270,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27m</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27n</div>
     </section>
   </main>
 
@@ -500,6 +503,10 @@ async function onScan(text){
   await processarEtiqueta({ qr:text, bmp, cantos });
 }
 $('#btnStart').onclick = startCam;
+/* Leitura do QR pela câmera ao vivo: desligada no layout por enquanto (o código continua no app).
+   Para reativar, troque para true. A foto da etiqueta continua usando o QR para achar o texto. */
+const CAMERA_AO_VIVO = false;
+if(!CAMERA_AO_VIVO){ $('#readerWrap').hidden = true; $('#btnStop').hidden = true; $('#biparIntro').hidden = false; document.querySelector('#v-bipar').classList.add('semcam'); }
 $('#btnStop').onclick = stopCam;
 $('#btnTorch').onclick = async () => { try{ torch = !torch; await stream.getVideoTracks()[0].applyConstraints({ advanced:[{ torch }] }); $('#btnTorch').textContent = torch?'Lanterna ✓':'Lanterna'; }catch(e){ toast('Lanterna indisponível neste aparelho.'); } };
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden) stopCam(); });
@@ -1410,7 +1417,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27m' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27m' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27n' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27n' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

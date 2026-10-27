@@ -69,19 +69,21 @@
     const trat = up(a.tratamento);
     const tratada = grupo === 'TSI' || !!(trat && trat !== '-O-' && trat !== 'SEM TRATAMENTO' && trat !== 'NAO');
     const inova = /INOVA\s*GENETICA/.test(up(a.produtor));
+    // análise DEFINITIVA (ex.: lote definitivo) não divide andar com análise prévia
+    const definitiva = protocolo && /DEFINITIVA/.test(tipo);
     return {
       classificacao: protocolo ? 'Protocolo' : 'Entrada de amostra manual',
       cultura: especie || 'NÃO INFORMADA',
-      grupo, tratada, inova,
+      grupo, tratada, inova, definitiva,
       armazena: grupo !== 'NAO'
     };
   }
   // chave que define quem pode dividir a mesma prateleira (regras 1 a 4 + embalagem)
   function perfil(a, embalagem) {
     const c = classificar(a);
-    return { cultura: c.cultura, tratada: c.tratada, inova: c.inova, grupo: c.grupo, embalagem: embalagem || a.embalagem || '' };
+    return { cultura: c.cultura, tratada: c.tratada, inova: c.inova, grupo: c.grupo, definitiva: c.definitiva, embalagem: embalagem || a.embalagem || '' };
   }
-  const chavePerfil = p => [p.cultura, p.tratada ? 'TRAT' : 'SEM', p.inova ? 'INOVA' : 'GERAL', p.grupo, p.embalagem].join('|');
+  const chavePerfil = p => [p.cultura, p.tratada ? 'TRAT' : 'SEM', p.inova ? 'INOVA' : 'GERAL', p.grupo, p.definitiva ? 'DEF' : 'PREV', p.embalagem].join('|');
   // resumo dos perfis por andar, ex.: "A.01–A.02: SOJA · … · A.03: MILHO · … · A.04: livre"
   function textoAndares(x) {
     if (!x || !x.andares) return 'Livre';
@@ -89,7 +91,7 @@
   }
   function textoPerfil(p) {
     if (!p) return 'Livre';
-    return [p.cultura, p.tratada ? 'Tratada' : 'Sem tratamento', p.inova ? 'INOVA GENÉTICA' : 'Demais produtores', (GRUPOS[p.grupo] || {}).curto || p.grupo].join(' · ');
+    return [p.cultura, p.tratada ? 'Tratada' : 'Sem tratamento', p.inova ? 'INOVA GENÉTICA' : 'Demais produtores', ((GRUPOS[p.grupo] || {}).curto || p.grupo) + (p.definitiva ? ' (Definitiva)' : '')].join(' · ');
   }
   // explica por que a amostra não pode entrar num andar com outro perfil (a separação é por ANDAR da prateleira)
   function motivosIncompat(pa, pb) {
@@ -98,6 +100,7 @@
     if (pa.cultura !== pb.cultura) m.push('cultura diferente neste andar (' + pb.cultura + ')');
     if (pa.tratada !== pb.tratada) m.push(pb.tratada ? 'andar de amostras tratadas' : 'andar de amostras sem tratamento');
     if (pa.inova !== pb.inova) m.push(pb.inova ? 'andar exclusivo INOVA GENÉTICA' : 'INOVA GENÉTICA não fica no mesmo andar dos demais produtores');
+    if (!!pa.definitiva !== !!pb.definitiva) m.push(pb.definitiva ? 'andar de análise DEFINITIVA' : 'análise DEFINITIVA não fica no mesmo andar da análise prévia');
     if (pa.grupo !== pb.grupo) m.push('andar com tipo de remessa de outro grupo (' + ((GRUPOS[pb.grupo] || {}).curto || pb.grupo) + ')');
     return m;
   }
@@ -493,7 +496,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.10.27f',
+    VERSAO_REGRAS: '2026.10.27g',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

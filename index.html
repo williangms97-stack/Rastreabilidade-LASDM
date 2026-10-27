@@ -10,14 +10,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.27k"></script>
+<script src="regras.js?v=2026.10.27l"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27k'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27l'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
   --bg:#eef3f0; --surface:#ffffff; --ink:#173f35; --muted:#55706a; --line:#d2ded9;
-  --accent:#1f7a5c; --accent-ink:#ffffff; --frost:#dcece5;
+  --accent:#1f7a5c; --accent-ink:#ffffff; --frost:#dcece5; --ink-2:#3f5a53; --hair:#e8efeb;
   --ok:#1d7a4f; --warn:#a85f00; --bad:#b3261e; --warn-bg:#fff2dc; --bad-bg:#fde7e5; --ok-bg:#e1f3e9;
   --f-ui:"IBM Plex Sans Condensed","Roboto Condensed","Arial Narrow",system-ui,sans-serif;
   --f-code:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -165,6 +165,13 @@ table.rg td{border:1px solid var(--line);padding:6px}
 .selit.on .selcb{background:var(--accent);border-color:var(--accent)}.selit.on .item{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
 .selbar{position:sticky;bottom:0;background:var(--ink);color:#fff;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;z-index:2}
 .selbar .btn.sec{background:var(--frost);color:var(--ink)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}.chip{border:1.5px solid var(--line);border-radius:999px;padding:6px 12px;font-size:14px;font-weight:700;background:var(--surface);color:var(--ink);cursor:pointer}.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.salabox{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.salahd{background:var(--ink);color:#fff;padding:10px 12px;font-weight:800;display:flex;justify-content:space-between}
+.salagr{padding:8px 10px;border-top:1px solid var(--hair);display:flex;flex-direction:column;gap:6px}
+.salagh{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:800;color:var(--ink-2)}
+.lnk{border:0;background:none;color:var(--accent);font-weight:800;font-size:13px;cursor:pointer;padding:4px}
+.selit.apag{opacity:.45}
 </style>
 </head>
 <body>
@@ -260,7 +267,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27k</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27l</div>
     </section>
   </main>
 
@@ -1104,7 +1111,7 @@ function linhaSel(num, andar, l){
 }
 // de cima para baixo: quem sai primeiro é a de cima, assim as selecionadas não "descem" à toa
 const deCimaParaBaixo = prots => prots.map(k=>EST[k]).filter(Boolean).sort((a,b)=>b.slot.altura-a.slot.altura).map(e=>e.protocolo);
-async function loteExecutar(titulo, prots, fazer, linhaRef){
+async function loteExecutar(titulo, prots, fazer, linhaRef, voltar){
   const res = [];
   for(const k of prots){ const e = EST[k]; if(!e){ continue; } const r = await fazer(e); res.push({ prot:k, r }); }
   sincronizar(); beep(!res.some(x=>x.r && x.r.erro));
@@ -1118,7 +1125,7 @@ async function loteExecutar(titulo, prots, fazer, linhaRef){
     ${subiram.length?`<div class="small">Subiram automaticamente: ${subiram.map(d=>esc(d.e.protocolo)+' ('+esc(L.nomeAltura(d.e.embalagem,d.de.altura))+'→'+esc(L.nomeAltura(d.e.embalagem,d.para.altura))+')').join(', ')}.</div>`:''}
     <div class="row"><button class="btn sec" id="ltEtq">Imprimir etiqueta da linha</button><button class="btn" id="ltOk">Concluir</button></div>`);
   $('#ltEtq').onclick = () => imprimirEtiquetas([linhaRef]);
-  $('#ltOk').onclick = () => { fecharSheet(); render(); verPrateleira(linhaRef[0], linhaRef[1]); };
+  $('#ltOk').onclick = () => { fecharSheet(); render(); if(voltar) voltar(); else verPrateleira(linhaRef[0], linhaRef[1]); };
 }
 function loteSala(num, andar, l, sala){
   const prots = deCimaParaBaixo([...SEL.arq]);
@@ -1153,24 +1160,74 @@ function loteRemanejar(num, andar, l){
   $('#lrOk').onclick = () => { const out = plano().filter(x=>x.slot); const mapa = new Map(out.map(x=>[x.k, x.slot]));
     loteExecutar('Remanejadas', out.map(x=>x.k), e => registrar(ctxDe(e), 'REMANEJAR', { slot:mapa.get(e.protocolo) }, true), [num, andar, l]); };
 }
+function retornarUma(e){
+  const c = ctxDe(e), ant = e.slotAnterior, pr = ant && prateleiras().find(x=>x.numero===ant.prateleira);
+  let ins = pr ? posicaoOrigem(c.a, c.emb, ant, pr) : null, slot = ins && ins.slot;
+  if(!slot){ const sg = L.sugerirPosicao(c.a, c.emb, EST, prateleiras(), e.protocolo); slot = sg.slot; ins = null; if(!slot) return { erro: sg.motivo }; }
+  return registrar(c, 'ARMAZENAR', { slot, inserir:ins }, true);
+}
 // retornar várias que saíram desta linha: cada uma para a posição de origem (de baixo para cima)
 function loteRetorno(num, andar, l){
   const prots = [...SEL.sala].map(k=>EST[k]).filter(Boolean).sort((a,b)=>a.slotAnterior.altura-b.slotAnterior.altura).map(e=>e.protocolo);
   if(!confirm(`Retornar ${prots.length} amostra(s) às posições de origem?\n${prots.map(k=>k+' → '+L.textoSlot(EST[k].slotAnterior, EST[k].embalagem)).join('\n')}`)) return;
-  loteExecutar('Retornaram ao arquivo', prots, e => {
-    const c = ctxDe(e), ant = e.slotAnterior, pr = ant && prateleiras().find(x=>x.numero===ant.prateleira);
-    let ins = pr ? posicaoOrigem(c.a, c.emb, ant, pr) : null, slot = ins && ins.slot;
-    if(!slot){ const sg = L.sugerirPosicao(c.a, c.emb, EST, prateleiras(), e.protocolo); slot = sg.slot; ins = null; if(!slot) return { erro: sg.motivo }; }
-    return registrar(c, 'ARMAZENAR', { slot, inserir:ins }, true);
-  }, [num, andar, l]);
+  loteExecutar('Retornaram ao arquivo', prots, retornarUma, [num, andar, l]);
 }
 
 /* ================== AMOSTRAS ================== */
 let filtroAm = 'ARQUIVO';
 $('#fAm').onclick = e => { const b = e.target.closest('[data-f]'); if(!b) return; filtroAm = b.dataset.f; renderAmostras(); };
 $('#qAm').addEventListener('input', ()=>{ clearTimeout(window._qa); window._qa = setTimeout(renderAmostras, 200); });
+/* Amostras em sala: separadas por sala e, dentro dela, pela linha de origem (ordem do arquivo).
+   Seleção múltipla só de uma mesma prateleira + andar + linha. */
+const SS = { sala:'', linha:'', sel:new Set() };
+const chaveLinha = s => s ? [s.prateleira, s.andar, s.linha].join('|') : 'sem';
+function renderSalasApp(q){
+  const todas = Object.values(EST).filter(e=>e.status==='SALA' && (!q || [e.protocolo,e.cultivar,e.lote,e.remessa,e.local].some(v=>L.up(v).includes(q))));
+  const ord = L.EMBALAGENS.CX05.lados.concat(['T','F']);
+  const cmp = (a,b) => { const x = a.slotAnterior, y = b.slotAnterior; if(!x || !y) return (x?0:1)-(y?0:1) || a.protocolo.localeCompare(b.protocolo);
+    return x.prateleira-y.prateleira || x.andar-y.andar || x.linha-y.linha || String(y.lado).charAt(0).localeCompare(String(x.lado).charAt(0)) || x.altura-y.altura || ord.indexOf(x.lado)-ord.indexOf(y.lado); };
+  [...SS.sel].forEach(k=>{ if(!todas.some(e=>e.protocolo===k)) SS.sel.delete(k); }); if(!SS.sel.size) SS.linha = '';
+  const salas = L.SALAS.map(nome=>({ nome, lista: todas.filter(e=>e.local===nome).sort(cmp) })), outras = todas.filter(e=>L.SALAS.indexOf(e.local)<0).sort(cmp);
+  if(outras.length) salas.push({ nome:'Outros locais', lista:outras });
+  const curto = n => n.replace(/^Sala de /,'').replace(/ de sementes$/,'').replace(/^./, c=>c.toUpperCase());
+  let h = `<div class="chips"><button class="chip${!SS.sala?' on':''}" data-ssala="">Todas (${todas.length})</button>${salas.map(sx=>`<button class="chip${SS.sala===sx.nome?' on':''}" data-ssala="${esc(sx.nome)}">${esc(curto(sx.nome))} (${sx.lista.length})</button>`).join('')}</div>`;
+  salas.filter(sx=>sx.lista.length && (!SS.sala || SS.sala===sx.nome)).forEach(sx=>{
+    h += `<div class="salabox"><div class="salahd"><span>${esc(sx.nome)}</span><span>${sx.lista.length}</span></div>`;
+    const grupos = new Map(); sx.lista.forEach(e=>{ const k = chaveLinha(e.slotAnterior); if(!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(e); });
+    grupos.forEach((lista, k)=>{ const s0 = lista[0].slotAnterior, outra = SS.linha && SS.linha!==k;
+      const tit = s0 ? `P.${L.p2(s0.prateleira)} · A.${L.p2(s0.andar)} · Linha ${L.p2(s0.linha)}` : 'Sem posição de origem';
+      const todasSel = lista.every(e=>SS.sel.has(e.protocolo));
+      h += `<div class="salagr"><div class="salagh"><span>${tit}</span>${s0 ? (outra ? '<span class="small">outra linha</span>' : `<button class="lnk" data-slinha="${esc(k)}" data-sroom="${esc(sx.nome)}">${todasSel?'Desmarcar linha':'Selecionar linha'}</button>`) : ''}</div>`
+        + lista.map(e=>{ const on = SS.sel.has(e.protocolo), pr = s0 && prateleiras().find(p=>p.numero===s0.prateleira);
+          return `<div class="selit${on?' on':''}${outra?' apag':''}">${s0?`<button class="selcb" data-ssel="${esc(e.protocolo)}" data-k="${esc(k)}" aria-pressed="${on}" aria-label="Selecionar ${esc(e.protocolo)}">${on?'✓':''}</button>`:''}
+            <button class="item" data-prot="${esc(e.protocolo)}"><span class="prot">${esc(e.protocolo)}</span><span class="side">${e.slotAnterior?esc(L.nomeLado(e.slotAnterior.lado))+' · '+esc(L.nomeAltura(pr?pr.embalagem:e.embalagem, e.slotAnterior.altura)):''}</span>
+            <span class="meta">${esc(e.cultivar||'')} · ${esc(e.remessa||e.classificacao||'')} · há ${dur(Date.now()-e.desde)}</span></button></div>`; }).join('') + `</div>`; });
+    h += `</div>`; });
+  if(!todas.length) h += `<div class="empty">${q?'Nada encontrado.':'Nenhuma amostra em sala.'}</div>`;
+  if(SS.sel.size){ const s0 = EST[[...SS.sel][0]].slotAnterior;
+    h += `<div class="selbar"><b>${SS.sel.size} selecionada(s) · P.${L.p2(s0.prateleira)} · A.${L.p2(s0.andar)} · Linha ${L.p2(s0.linha)}</b>
+      <button class="btn" data-sacao="RET">Retornar às posições de origem</button>
+      <div class="small" style="color:#cfe3da">Mover para outra sala:</div><div class="grid2">${L.SALAS.map((sx,i)=>`<button class="btn sec sm" data-smover="${i}">${esc(curto(sx))}</button>`).join('')}</div></div>`; }
+  $('#listAm').innerHTML = h;
+}
+$('#listAm').addEventListener('click', ev => {
+  if(filtroAm!=='SALA') return;
+  const ch = ev.target.closest('[data-ssala]'); if(ch){ SS.sala = ch.dataset.ssala; renderAmostras(); ev.stopImmediatePropagation(); return; }
+  const sl = ev.target.closest('[data-slinha]'); if(sl){ const k = sl.dataset.slinha, sala = sl.dataset.sroom, lista = Object.values(EST).filter(e=>e.status==='SALA' && chaveLinha(e.slotAnterior)===k && (sala==='Outros locais' ? L.SALAS.indexOf(e.local)<0 : e.local===sala));
+    if(SS.linha!==k){ SS.sel.clear(); SS.linha = k; } if(lista.every(e=>SS.sel.has(e.protocolo))) lista.forEach(e=>SS.sel.delete(e.protocolo)); else lista.forEach(e=>SS.sel.add(e.protocolo)); renderAmostras(); ev.stopImmediatePropagation(); return; }
+  const cb = ev.target.closest('[data-ssel]'); if(cb){ const k = cb.dataset.k, p = cb.dataset.ssel;
+    if(SS.linha && SS.linha!==k){ SS.sel.clear(); toast('A seleção vale só para uma mesma prateleira, andar e linha.'); }
+    SS.linha = k; SS.sel.has(p) ? SS.sel.delete(p) : SS.sel.add(p); renderAmostras(); ev.stopImmediatePropagation(); return; }
+  const ac = ev.target.closest('[data-sacao]'); if(ac){ const prots = [...SS.sel].map(k=>EST[k]).filter(Boolean).sort((a,b)=>a.slotAnterior.altura-b.slotAnterior.altura).map(e=>e.protocolo), s0 = EST[prots[0]].slotAnterior;
+    if(!confirm(`Retornar ${prots.length} amostra(s) às posições de origem?\n${prots.map(k=>k+' → '+L.textoSlot(EST[k].slotAnterior, EST[k].embalagem)).join('\n')}`)) return;
+    SS.sel.clear(); SS.linha = ''; loteExecutar('Retornaram ao arquivo', prots, retornarUma, [s0.prateleira, s0.andar, s0.linha], ()=>{ show('amostras'); renderAmostras(); }); ev.stopImmediatePropagation(); return; }
+  const mv = ev.target.closest('[data-smover]'); if(mv){ const sala = L.SALAS[+mv.dataset.smover], prots = [...SS.sel], s0 = EST[prots[0]].slotAnterior;
+    if(!confirm(`Mover ${prots.length} amostra(s) para ${sala}?`)) return;
+    SS.sel.clear(); SS.linha = ''; loteExecutar('Movidas para ' + sala, prots, e => e.local===sala ? { erro:'já está nesta sala' } : registrar(ctxDe(e), 'SALA', { destino:sala }, true), [s0.prateleira, s0.andar, s0.linha], ()=>{ show('amostras'); renderAmostras(); }); ev.stopImmediatePropagation(); return; }
+}, true);
 function renderAmostras(){
   $('#fAm').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.f===filtroAm));
+  if(filtroAm==='SALA'){ renderSalasApp(L.up($('#qAm').value)); return; }
   const q = L.up($('#qAm').value);
   const pend = new Set(pendencias().map(m=>m.protocolo));
   let lista = Object.values(EST);
@@ -1344,7 +1401,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27k' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27k' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27l' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27l' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

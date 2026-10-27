@@ -7,9 +7,9 @@
 <title>Painel LASDM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<script src="regras.js?v=2026.10.27r"></script>
+<script src="regras.js?v=2026.10.27s"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27r'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27s'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -65,6 +65,21 @@ h2{margin:0;font-size:18px}
 .prat .andares div span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--ink)}
 .pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid rgba(0,0,0,.1);white-space:nowrap}
 .pill.ok{background:var(--ok-bg);color:var(--ok)} .pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.bad{background:var(--bad-bg);color:var(--bad)} .pill.mut{background:var(--hair);color:var(--muted)}
+.cdgrid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);gap:18px;align-items:start}@media (max-width:900px){.cdgrid{grid-template-columns:1fr}}
+.cpform{border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+.cpform h3{margin:0;font-size:16px}
+.cpform label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.cpform input,.cpform select{height:40px;border:1.5px solid var(--line);border-radius:8px;padding:0 10px;background:var(--surface);font:inherit;text-transform:none;letter-spacing:0;font-weight:500;color:var(--ink)}
+.cpand{display:grid;grid-template-columns:44px 1fr;gap:8px;align-items:center}
+.cpand b{font-size:13px}
+.segc{display:flex;border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.segc button{flex:1;height:36px;border:0;background:transparent;font:inherit;font-size:13px;font-weight:700;color:var(--ink);cursor:pointer;border-left:1px solid var(--line)}
+.segc button:first-child{border-left:0}.segc button[aria-pressed=true]{background:var(--accent);color:#fff}.segc button:disabled{opacity:.35;cursor:not-allowed}
+.cdgrid.u{grid-template-columns:minmax(0,2.2fr) minmax(280px,1fr)}@media (max-width:900px){.cdgrid.u{grid-template-columns:1fr}}
+.cptab .btn{height:32px;padding:0 10px;font-size:13px}
+.cprow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.cptab td,.cptab th{white-space:nowrap}table.cptab{min-width:0}.cptab tr.on td{background:var(--ok-bg)}
+.btn.ghost{background:transparent;border:1.5px solid var(--line);color:var(--ink)}.btn.danger{background:var(--bad)}
 .fbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
 .fbar label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .fbar input,.fbar select{height:40px;border:1.5px solid var(--line);border-radius:8px;padding:0 10px;background:var(--surface);min-width:140px;text-transform:none;letter-spacing:0;font-weight:500;color:var(--ink)}
@@ -179,7 +194,7 @@ tbody tr:hover{background:#f7fbf9}
     <a class="hbtn" href="./" title="Abrir o app de bipagem">App</a>
     <button class="hbtn" id="btnSair">Sair</button>
   </div>
-  <nav class="tabs" aria-label="Seções"><a href="#visao" class="on">Visão geral</a><a href="#arquivo">Arquivo e salas</a><a href="#conciliacao">Conciliação</a><a href="#movimentos">Movimentos</a><a href="#planilhas">Planilhas de referência</a></nav>
+  <nav class="tabs" aria-label="Seções"><a href="#visao" class="on">Visão geral</a><a href="#arquivo">Arquivo e salas</a><a href="#conciliacao">Conciliação</a><a href="#movimentos">Movimentos</a><a href="#planilhas">Planilhas de referência</a><a href="#cadastro">Cadastros</a></nav>
 </header>
 
 <main id="main" hidden>
@@ -276,6 +291,17 @@ tbody tr:hover{background:#f7fbf9}
       <div id="refPrev"></div>
     </div>
   </section>
+  <!-- CADASTROS -->
+  <section class="pagina" id="cadastro" hidden>
+    <div class="card">
+      <div><h2>Prateleiras</h2><div class="sub">Cadastro e edição das prateleiras (operadores e administradores). Cada andar tem a sua embalagem; a embalagem de um andar só muda com o andar vazio.</div></div>
+      <div class="cdgrid"><div id="cpLista"></div><form class="cpform" id="cpForm" autocomplete="off"></form></div>
+    </div>
+    <div class="card" id="cuCard">
+      <div><h2>Usuários</h2><div class="sub">Somente administradores: cadastrar usuários, trocar senha, desativar ou reativar.</div></div>
+      <div id="cuBox"></div>
+    </div>
+  </section>
   <div class="sub" id="rodape"></div>
 </main>
 
@@ -311,7 +337,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27r' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27r' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27s' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27s' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -415,7 +441,8 @@ function render(){
   renderSalas();
   renderMovimentos();
   renderRefStatus();
-  $('#rodape').textContent = `Painel versão 2026.10.27r · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
+  renderCadastro();
+  $('#rodape').textContent = `Painel versão 2026.10.27s · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -597,13 +624,14 @@ $('#btnEnviarRef').onclick = async () => {
 };
 
 /* ---------- navegação e dicas ---------- */
-const PAGINAS = ['visao','arquivo','conciliacao','movimentos','planilhas'];
+const PAGINAS = ['visao','arquivo','conciliacao','movimentos','planilhas','cadastro'];
 function irPara(id, semHist){
   if(!PAGINAS.includes(id)) id = 'visao';
   PAGINAS.forEach(p=>document.getElementById(p).hidden = p!==id);
   document.querySelectorAll('nav.tabs a').forEach(a=>a.classList.toggle('on', a.getAttribute('href')==='#'+id));
   if(!semHist && location.hash!=='#'+id){ try{ history.pushState(null,'','#'+id); }catch(e){} }
   if(id==='conciliacao') renderConciliacao(false);
+  if(id==='cadastro') renderCadastro();
   window.scrollTo(0,0);
 }
 document.querySelectorAll('nav.tabs a').forEach(a=>a.addEventListener('click', e=>{ e.preventDefault(); irPara(a.getAttribute('href').slice(1)); }));
@@ -914,6 +942,102 @@ $('#vzBuscaMsg').addEventListener('click', e=>{ const b = e.target.closest('[dat
 /* ---------- início ---------- */
 $('#btnAtualizar').onclick = carregar;
 let rz; addEventListener('resize', ()=>{ clearTimeout(rz); rz = setTimeout(render, 200); });
+/* ---------- cadastros: prateleiras (todos) e usuários (administradores) ---------- */
+const CP = { id:null, andares:['CX1','CX1','CX1','CX1'], lin:15, salvando:false };
+const OPC_EMB = [['CX1','1 kg'],['CX05','0,5 kg'],['KRAFT','Kraft'],['','Livre']];
+const curtaEmb = k => k==='CX1' ? 'Cx 1 kg' : k==='CX05' ? 'Cx 0,5 kg' : k==='KRAFT' ? 'Kraft' : 'Livre';
+const amostrasDa = num => Object.values(EST).filter(e=>e.slot && (e.status==='ARQUIVO'||e.status==='SALA') && e.slot.prateleira===num);
+function renderCadastro(){
+  if(!DADOS || $('#cadastro').hidden) return;
+  const prats = prateleiras().slice().sort((a,b)=>a.numero-b.numero);
+  $('#cpLista').innerHTML = prats.length ? `<div class="tw"><table class="cptab"><thead><tr><th>Nº</th><th>A.01</th><th>A.02</th><th>A.03</th><th>A.04</th><th>Linhas</th><th>Amostras</th><th>Situação</th><th>Mapa</th><th></th></tr></thead><tbody>${prats.map(p=>{ const a = L.andaresDe(p), n = amostrasDa(p.numero).length;
+    return `<tr class="${CP.id===p.id?'on':''}"><td><b>P.${L.p2(p.numero)}</b></td>${a.map(k=>`<td>${curtaEmb(k)}</td>`).join('')}<td>${L.temCaixinha(p)?L.nLinhas('CX1',p.linhas):'—'}</td><td>${n} / ${L.capPrat(p, EST)}</td><td><span class="pill ${p.situacao==='Inativa'?'bad':'ok'}">${esc(p.situacao||'Ativa')}</span></td><td>${esc(p.mapa||'—')}</td><td><button class="btn sec" style="height:32px" data-cped="${esc(p.id)}">Editar</button></td></tr>`; }).join('')}</tbody></table></div>`
+    : '<div class="empty">Nenhuma prateleira cadastrada.</div>';
+  formPrat();
+  renderUsuarios();
+}
+function formPrat(){
+  const p = CP.id && prateleiras().find(x=>x.id===CP.id), am = p ? amostrasDa(p.numero) : [];
+  const nums = prateleiras().map(x=>x.numero), prox = nums.length ? Math.max(...nums)+1 : 1;
+  const usados = [1,2,3,4].map(a=>am.some(e=>e.slot.andar===a));
+  const fake = { andares:CP.andares.join(','), linhas:CP.lin }, temCx = CP.andares.some(k=>!k || L.LINHAS_OPCOES[k]);
+  const numAtual = $('#cpNum') && !p ? $('#cpNum').value : '', obsAtual = $('#cpObs') ? $('#cpObs').value : null;
+  $('#cpForm').innerHTML = `<h3>${p ? 'Editar prateleira '+L.p2(p.numero) : 'Nova prateleira'}</h3>
+    <label>Número<input type="number" id="cpNum" min="1" value="${p ? p.numero : (numAtual || prox)}" ${p?'disabled':''}></label>
+    <div class="cprow" style="justify-content:space-between"><b style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Embalagem por andar</b>
+      <select id="cpTodos" style="height:34px;border:1.5px solid var(--line);border-radius:8px"><option value="">Mesma para todos…</option>${OPC_EMB.map(([k,t])=>`<option value="${k||'LIVRE'}">${t}</option>`).join('')}</select></div>
+    ${[4,3,2,1].map(a=>`<div class="cpand"><b>A.${L.p2(a)}</b><div class="segc" data-cpa="${a}">${OPC_EMB.map(([k,t])=>`<button type="button" data-emb="${k}" aria-pressed="${CP.andares[a-1]===k}" ${usados[a-1]&&CP.andares[a-1]!==k?'disabled title="Andar com amostras: esvazie para mudar"':''}>${t}</button>`).join('')}</div></div>`).join('')}
+    <div class="sub">Livre = o andar assume a embalagem da 1ª amostra.${usados.some(Boolean)?' Andares com amostras não mudam de embalagem.':''}</div>
+    <div class="cprow" ${temCx?'':'hidden'}><span class="sub" style="flex:1">Linhas nos andares de caixinha</span><div class="segc" id="cpLin" style="width:110px">${[14,15].map(n=>`<button type="button" data-lin="${n}" aria-pressed="${CP.lin===n}">${n}</button>`).join('')}</div></div>
+    <label>Observação<input type="text" id="cpObs" value="${esc(obsAtual!=null ? obsAtual : p ? p.obs||'' : '')}"></label>
+    <div class="sub"><b>Capacidade:</b> ${L.capPrat(fake).toLocaleString('pt-BR')} posições${CP.andares.some(k=>!k)?' + andares livres':''}</div>
+    <div id="cpMsg"></div>
+    <div class="cprow">${p ? `<button type="button" class="btn ghost" id="cpNovo">Cancelar</button><button type="button" class="btn ghost" id="cpSit">${p.situacao==='Inativa'?'Reativar':'Desativar'}</button>` : ''}<button type="submit" class="btn" style="margin-left:auto">${p ? 'Salvar alterações' : 'Cadastrar prateleira'}</button></div>`;
+  $('#cpForm').querySelectorAll('[data-cpa]').forEach(sg=>sg.onclick = ev=>{ const b = ev.target.closest('[data-emb]'); if(!b || b.disabled) return; CP.andares[+sg.dataset.cpa-1] = b.dataset.emb; formPrat(); });
+  $('#cpTodos').onchange = () => { const v = $('#cpTodos').value; if(!v) return; for(let i=0;i<4;i++) if(!usados[i]) CP.andares[i] = v==='LIVRE' ? '' : v; formPrat(); };
+  if($('#cpLin')) $('#cpLin').onclick = ev => { const b = ev.target.closest('[data-lin]'); if(b){ CP.lin = +b.dataset.lin; formPrat(); } };
+  if($('#cpNovo')) $('#cpNovo').onclick = () => { novoCP(); $('#cpForm').innerHTML = ''; renderCadastro(); };
+  if($('#cpSit')) $('#cpSit').onclick = () => { if(am.length && p.situacao!=='Inativa' && !confirm('A prateleira tem '+am.length+' amostra(s). Desativar mesmo assim? Ela não recebe novas amostras.')) return; salvarPratPainel(Object.assign({}, p, { situacao: p.situacao==='Inativa'?'Ativa':'Inativa' })); };
+}
+function novoCP(){ CP.id = null; CP.andares = ['CX1','CX1','CX1','CX1']; CP.lin = 15; }
+$('#cpLista').addEventListener('click', e=>{ const b = e.target.closest('[data-cped]'); if(!b) return; const p = prateleiras().find(x=>x.id===b.dataset.cped); if(!p) return;
+  CP.id = p.id; CP.andares = L.andaresDe(p); CP.lin = L.nLinhas('CX1', p.linhas); $('#cpForm').innerHTML = ''; renderCadastro(); $('#cpForm').scrollIntoView({ behavior:'smooth', block:'nearest' }); });
+$('#cpForm').onsubmit = e => { e.preventDefault();
+  const p = CP.id && prateleiras().find(x=>x.id===CP.id), msg = t => { $('#cpMsg').innerHTML = `<div class="alert bad">${esc(t)}</div>`; };
+  const temCx = CP.andares.some(k=>!k || L.LINHAS_OPCOES[k]);
+  if(!p){ const n = parseInt($('#cpNum').value, 10); if(!(n>0)) return msg('Número inválido.'); if(prateleiras().some(x=>x.numero===n)) return msg('Já existe a prateleira '+L.p2(n)+'.');
+    return salvarPratPainel({ id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), numero:n, embalagem:L.resumoEmb(CP.andares), andares:CP.andares.join(','), linhas: temCx ? CP.lin : '', situacao:'Ativa', obs:$('#cpObs').value.trim(), mapa:'' }); }
+  const am = amostrasDa(p.numero);
+  const muda = [1,2,3,4].find(a=>CP.andares[a-1]!==L.andaresDe(p)[a-1] && am.some(e=>e.slot.andar===a));
+  if(muda) return msg('O andar A.'+L.p2(muda)+' tem amostras: esvazie o andar para mudar a embalagem.');
+  const np = Object.assign({}, p, { andares:CP.andares.join(',') });
+  const fora = am.filter(e=>L.LINHAS_OPCOES[L.embAndar(np, e.slot.andar, EST)] && e.slot.linha > CP.lin);
+  if(temCx && fora.length) return msg('Há amostras na linha 15 de andar de caixinha. Remaneje-as antes de reduzir para 14 linhas.');
+  salvarPratPainel(Object.assign(np, { embalagem:L.resumoEmb(CP.andares), linhas: temCx ? CP.lin : '', obs:$('#cpObs').value.trim() }));
+};
+async function salvarPratPainel(p){
+  if(CP.salvando) return; CP.salvando = true; $('#cpMsg').innerHTML = '<div class="sub">Salvando…</div>';
+  try{
+    const env = { id:p.id, numero:p.numero, embalagem:p.embalagem, situacao:p.situacao||'Ativa', obs:p.obs||'', linhas:p.linhas||'', mapa:p.mapa||'', andares: Array.isArray(p.andares) ? p.andares.join(',') : (p.andares||'') };
+    await post({ prateleiras:[env], usuario: SESSAO && SESSAO.nome || '' });
+    const i = (DADOS.prateleiras||[]).findIndex(x=>x.id===p.id); if(i>=0) DADOS.prateleiras[i] = Object.assign({}, DADOS.prateleiras[i], env); else (DADOS.prateleiras = DADOS.prateleiras||[]).push(env);
+    const novo = !CP.id; novoCP(); $('#cpForm').innerHTML = ''; render(); renderCadastro();
+    $('#cpMsg').innerHTML = `<div class="alert ok">Prateleira ${L.p2(p.numero)} ${novo ? 'cadastrada' : 'salva'}. Os celulares recebem na próxima sincronização.</div>`;
+    if(DADOS.versao < 8) $('#cpMsg').innerHTML += '<div class="alert warn" style="margin-top:6px">O script da planilha precisa estar na versão 8 para guardar a embalagem de cada andar.</div>';
+  }catch(err){ $('#cpMsg').innerHTML = `<div class="alert bad">${esc(err.message||err)}</div>`; }
+  finally{ CP.salvando = false; }
+}
+// usuários: a senha do administrador é pedida uma vez e fica só na memória desta aba
+let ADM = null, USRS = null;
+const chamarUsuarios = extra => post(Object.assign({ acao:'usuarios', admin:ADM }, extra||{}));
+function renderUsuarios(){
+  const box = $('#cuBox'), adm = SESSAO && SESSAO.perfil==='Administrador';
+  if(!adm){ box.innerHTML = '<div class="sub">Você entrou como <b>operador</b>: o cadastro de usuários é só para administradores.</div>'; return; }
+  if(!ADM || !USRS){ if($('#cuLogin')) return;
+    box.innerHTML = `<form class="fbar" id="cuLogin"><label>Confirme a sua senha de administrador<input type="password" id="cuSenha" autocomplete="current-password"></label><button class="btn">Abrir usuários</button></form><div id="cuMsg"></div>`;
+    $('#cuLogin').onsubmit = async e => { e.preventDefault(); ADM = { usuario:SESSAO.usuario, senha:$('#cuSenha').value };
+      try{ USRS = (await chamarUsuarios({ op:'listar' })).usuarios; box.innerHTML = ''; renderUsuarios(); }catch(err){ ADM = null; $('#cuMsg').innerHTML = `<div class="alert bad" style="margin-top:8px">${esc(err.message)}</div>`; } };
+    return; }
+  if($('#cuForm') && box.dataset.v === JSON.stringify(USRS)) return;   // não apaga o que está sendo digitado na atualização automática
+  box.dataset.v = JSON.stringify(USRS);
+  box.innerHTML = `<div class="cdgrid u"><div class="tw"><table class="cptab"><thead><tr><th>Usuário</th><th>Nome</th><th>Perfil</th><th>Situação</th><th>Criado</th><th></th></tr></thead><tbody>${USRS.map(u=>`<tr><td class="mono">${esc(u.usuario)}</td><td>${esc(u.nome)}</td><td>${esc(u.perfil)}</td><td><span class="pill ${u.situacao==='Ativo'?'ok':'bad'}">${esc(u.situacao)}</span></td><td class="sub">${esc(u.criadoEm||'')}${u.criadoPor?' · '+esc(u.criadoPor):''}</td>
+      <td><button class="btn sec" style="height:32px" data-cus="${esc(u.usuario)}">Trocar senha</button> ${u.usuario!==SESSAO.usuario?`<button class="btn ghost" style="height:32px" data-cusit="${esc(u.usuario)}">${u.situacao==='Ativo'?'Desativar':'Reativar'}</button>`:''}</td></tr>`).join('')}</tbody></table></div>
+    <form class="cpform" id="cuForm" autocomplete="off"><h3>Novo usuário</h3>
+      <label>Usuário (login)<input type="text" id="cuUsr" autocapitalize="none" spellcheck="false" placeholder="ex.: joao.silva"></label>
+      <label>Nome<input type="text" id="cuNome"></label>
+      <label>Perfil<select id="cuPerfil"><option>Operador</option><option>Administrador</option></select></label>
+      <label>Senha (mín. 4 caracteres)<input type="password" id="cuS1" autocomplete="new-password"></label>
+      <label>Repita a senha<input type="password" id="cuS2" autocomplete="new-password"></label>
+      <div id="cuMsg"></div><button class="btn">Cadastrar usuário</button></form></div>`;
+  const msg = (t, ok) => { $('#cuMsg').innerHTML = `<div class="alert ${ok?'ok':'bad'}">${esc(t)}</div>`; };
+  const faz = async (extra, ok) => { try{ USRS = (await chamarUsuarios(extra)).usuarios; box.dataset.v = ''; renderUsuarios(); msg(ok, true); }catch(err){ msg(err.message); } };
+  $('#cuForm').onsubmit = e => { e.preventDefault(); const s1 = $('#cuS1').value;
+    if(s1 !== $('#cuS2').value) return msg('As senhas não conferem.');
+    faz({ op:'salvar', usuario:$('#cuUsr').value.trim().toLowerCase(), nome:$('#cuNome').value.trim(), perfil:$('#cuPerfil').value, senha:s1 }, 'Usuário cadastrado.'); };
+  box.querySelectorAll('[data-cus]').forEach(b=>b.onclick = () => { const s = prompt('Nova senha para '+b.dataset.cus+' (mín. 4 caracteres):'); if(s) faz({ op:'senha', usuario:b.dataset.cus, senha:s }, 'Senha alterada.'); });
+  box.querySelectorAll('[data-cusit]').forEach(b=>b.onclick = () => faz({ op:'situacao', usuario:b.dataset.cusit }, 'Situação alterada.'));
+}
+
 function iniciar(){
   $('#loginScr').hidden = true; $('#main').hidden = false;
   irPara(location.hash.slice(1), true);

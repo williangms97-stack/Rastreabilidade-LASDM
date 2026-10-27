@@ -465,8 +465,13 @@
     if (a === b || b.indexOf(a) >= 0 || a.indexOf(b) >= 0) return true;
     let d = lev(a, b);
     // o OCR costuma trazer sujeira antes/depois: compara também com os trechos do tamanho da referência
-    for (let w = Math.max(1, b.length - 1); w <= b.length + 1; w++) for (let i = 0; i + w <= a.length; i++) d = Math.min(d, lev(a.slice(i, i + w), b));
-    return d / b.length <= 0.3; }
+    const janela = (a, b) => { let dd = lev(a, b); for (let w = Math.max(1, b.length - 1); w <= b.length + 1; w++) for (let i = 0; i + w <= a.length; i++) dd = Math.min(dd, lev(a.slice(i, i + w), b)); return dd; };
+    d = Math.min(d, janela(a, b));
+    if (d / b.length <= 0.3) return true;
+    // o OCR muitas vezes corta ou embaralha o sufixo da tecnologia (I2X, IPRO…): confere também só o nome-base da cultivar
+    const base = b.replace(/(IZX|IPRO|RR|E3|CE|VIP3|PRO[Z34]|PW|TL|YH|VYHR)$/, '');
+    if (base !== b && base.length >= 4 && janela(a, base) / base.length <= 0.2) return true;
+    return false; }
   // protocolos "vizinhos" de uma leitura (um dígito trocado ou dois dígitos invertidos): para corrigir erro do OCR
   function protVizinhos(prot) {
     const n = String(protNum(prot)), ano = protAno(prot), out = new Set();
@@ -488,7 +493,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.10.27d',
+    VERSAO_REGRAS: '2026.10.27e',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

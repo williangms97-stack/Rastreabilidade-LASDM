@@ -7,9 +7,9 @@
 <title>Painel LASDM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<script src="regras.js?v=2026.10.27d"></script>
+<script src="regras.js?v=2026.10.27e"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27d'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27e'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -304,7 +304,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27d' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27d' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27e' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27e' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -407,7 +407,7 @@ function render(){
   renderSalas();
   renderMovimentos();
   renderRefStatus();
-  $('#rodape').textContent = `Painel versão 2026.10.27d · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
+  $('#rodape').textContent = `Painel versão 2026.10.27e · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
   ligarTips();
 }
 function barrasDia(serie, S, W){

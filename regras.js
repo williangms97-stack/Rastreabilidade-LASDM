@@ -267,6 +267,21 @@
     return pilha.filter(e => alt.get(e) !== e.slot.altura).map(e => ({ e, de: e.slot, para: Object.assign({}, e.slot, { altura: alt.get(e) }) }));
   }
 
+  /* Amostras que estão no arquivo mas não respeitam as regras atuais (ex.: emblocadas antes de uma regra nova):
+     perfil diferente do perfil do andar, ou sem apoio embaixo. Nada é movido sozinho: serve para remanejar. */
+  function foraDaRegra(est, prateleiras) {
+    const pp = perfisPrateleiras(est, prateleiras), cel = celulasOcupadas(est), out = [];
+    Object.values(est).forEach(e => {
+      if (!e.slot || e.status !== 'ARQUIVO') return;
+      const pr = (prateleiras || []).find(p => Number(p.numero) === Number(e.slot.prateleira)), x = pp[e.slot.prateleira];
+      const pa = x && x.andares[e.slot.andar] && x.andares[e.slot.andar].perfil, m = [];
+      if (pa) motivosIncompat(perfil(e, pr ? pr.embalagem : e.embalagem), pa).forEach(t => m.push(t));
+      if (e.slot.altura > 1 && celulasLado(e.slot.lado).some(c => !cel[chaveCel(e.slot, c, e.slot.altura - 1)])) m.push('sem caixinha embaixo (sem apoio)');
+      if (m.length) out.push({ e, motivos: m, perfilAndar: pa });
+    });
+    return out.sort((a, b) => a.e.slot.prateleira - b.e.slot.prateleira || a.e.slot.andar - b.e.slot.andar || a.e.slot.linha - b.e.slot.linha);
+  }
+
   /* ---------- Etiqueta da linha ---------- */
   // agrupa protocolos em faixas de sequência: [13931], [13961-13964]
   function faixas(prots) {
@@ -496,11 +511,11 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.10.27h',
+    VERSAO_REGRAS: '2026.10.27i',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
-    SALAS, estadoAtual, ocupacao, perfisPrateleiras, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
+    SALAS, estadoAtual, ocupacao, perfisPrateleiras, foraDaRegra, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
     ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };
 })(typeof window !== 'undefined' ? window : globalThis);

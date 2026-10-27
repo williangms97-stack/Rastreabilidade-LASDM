@@ -7,9 +7,9 @@
 <title>Painel LASDM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<script src="regras.js?v=2026.10.27h"></script>
+<script src="regras.js?v=2026.10.27i"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27h'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27i'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -203,6 +203,10 @@ tbody tr:hover{background:#f7fbf9}
       <button class="btn" id="vzBuscar">Localizar</button><button class="btn sec" id="vzLimpar">Limpar</button></div>
       <div id="vzBuscaMsg"></div></div>
     <div class="card"><div><h2>Ocupação das prateleiras</h2><div class="sub">Cada prateleira tem 4 andares; o gráfico mostra a ocupação de cada andar. Cada andar tem o seu perfil (cultura, tratamento, INOVA e grupo de remessa), vindo da primeira amostra armazenada nele; andares diferentes podem ter perfis diferentes.</div></div><div class="prats" id="prats"></div></div>
+    <div class="card" style="margin-top:18px" id="foraCard" hidden>
+      <div><h2>Amostras fora da regra</h2><div class="sub">Estão no arquivo, mas não respeitam as regras atuais (ex.: emblocadas antes de uma regra nova, ou sem caixinha embaixo). Nada é movido sozinho: remaneje pelo app.</div></div>
+      <div id="tbFora"></div>
+    </div>
     <div class="card" style="margin-top:18px" id="mapaCard">
       <div><h2>Mapa da sala do arquivo</h2><div class="sub">Clique numa estante com prateleira para abrir o 3D e o mapa 2D dela; numa estante vazia, escolha a prateleira que fica ali (para trocar, use o quadro ao lado). A cor mostra a ocupação.</div></div>
       <div class="mapa"><div id="mapaSvg"></div><div class="mapaInfo" id="mapaInfo"></div></div>
@@ -304,7 +308,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27h' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27h' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27i' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27i' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -404,10 +408,11 @@ function render(){
   renderPrateleiras();
   renderViz();
   renderMapa();
+  renderFora();
   renderSalas();
   renderMovimentos();
   renderRefStatus();
-  $('#rodape').textContent = `Painel versão 2026.10.27h · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
+  $('#rodape').textContent = `Painel versão 2026.10.27i · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -438,6 +443,16 @@ function andaresHTML(x){
   return `<div class="pandares">${[4,3,2,1].map(a=>{ const an = x && x.andares && x.andares[a], p = an && an.perfil, G = p ? (L.GRUPOS[p.grupo]||L.GRUPOS.OUTROS) : null;
     return `<div><b>A.${L.p2(a)}</b>${G?`<span class="swatch" style="background:${G.cor}"></span>`:''}<span>${esc(p ? L.textoPerfil(p) : 'livre')}</span></div>`; }).join('')}</div>`;
 }
+function renderFora(){
+  const fr = L.foraDaRegra(EST, prateleiras()); $('#foraCard').hidden = !fr.length; if(!fr.length) return;
+  tabela('tbFora', [
+    { k:'prot', t:'Protocolo', cls:'mono', v:x=>x.e.protocolo, h:x=>esc(x.e.protocolo) },
+    { k:'pos', t:'Posição', v:x=>L.chaveSlot(x.e.slot), h:x=>esc(L.textoSlot(x.e.slot, x.e.embalagem)) },
+    { k:'mot', t:'Por que está fora', v:x=>x.motivos.join('; '), h:x=>esc(x.motivos.join('; ')) },
+    { k:'and', t:'Perfil do andar', v:x=>x.perfilAndar?L.textoPerfil(x.perfilAndar):'', h:x=>esc(x.perfilAndar?L.textoPerfil(x.perfilAndar):'—') },
+    { k:'ver', t:'', v:()=>'', h:x=>`<button class="btn sec" style="height:30px" data-ver="${esc(x.e.protocolo)}">Ver</button>` } ], fr, 'Nenhuma.', ['pos', 1]);
+}
+$('#tbFora').addEventListener('click', e=>{ const v = e.target.closest('[data-ver]'); if(v) verNaPrateleira(v.dataset.ver); });
 /* tabela simples com ordenação e paginação */
 const TAB = {};
 function tabela(id, cols, linhas, vazio, ordem){

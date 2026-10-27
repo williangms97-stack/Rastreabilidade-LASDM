@@ -7,9 +7,9 @@
 <title>Painel LASDM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<script src="regras.js?v=2026.10.26t"></script>
+<script src="regras.js?v=2026.10.27a"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.26t'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -150,6 +150,21 @@ tbody tr:hover{background:#f7fbf9}
   #printArea{display:block;position:absolute;left:0;top:0;width:100%}
   @page{margin:10mm}
 }
+
+/* mapa da sala */
+.mapa{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(260px,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.mapa{grid-template-columns:minmax(0,1fr)}}
+.mapa svg{width:100%;height:auto;display:block;border:1px solid var(--line);border-radius:10px;background:#fbfcfb}
+.mapa .vg{cursor:pointer}
+.mapa .vg rect{stroke:#8a6a3a;stroke-width:2}
+.mapa .vg:hover rect{stroke:var(--ink);stroke-width:4}
+.mapa .vg.on rect{stroke:var(--ink);stroke-width:7}
+.mapa .vg.achado rect{stroke:#b3261e;stroke-width:8}
+.mapa .vg text{font-family:var(--f-ui);pointer-events:none}
+.mapaInfo{display:flex;flex-direction:column;gap:10px}
+.mapaInfo .box{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.mapaInfo select{height:38px;border:1.5px solid var(--line);border-radius:8px;padding:0 8px;background:var(--surface);color:var(--ink)}
+.mapaInfo .row2{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 </style>
 </head>
 <body>
@@ -188,6 +203,10 @@ tbody tr:hover{background:#f7fbf9}
       <button class="btn" id="vzBuscar">Localizar</button><button class="btn sec" id="vzLimpar">Limpar</button></div>
       <div id="vzBuscaMsg"></div></div>
     <div class="card"><div><h2>Ocupação das prateleiras</h2><div class="sub">Cada prateleira tem 4 andares; o gráfico mostra a ocupação de cada andar. Cada andar tem o seu perfil (cultura, tratamento, INOVA e grupo de remessa), vindo da primeira amostra armazenada nele; andares diferentes podem ter perfis diferentes.</div></div><div class="prats" id="prats"></div></div>
+    <div class="card" style="margin-top:18px" id="mapaCard">
+      <div><h2>Mapa da sala do arquivo</h2><div class="sub">Clique numa estante do mapa para colocar (ou trocar) o número da prateleira que fica ali. A cor mostra a ocupação; a prateleira aberta abaixo fica destacada.</div></div>
+      <div class="mapa"><div id="mapaSvg"></div><div class="mapaInfo" id="mapaInfo"></div></div>
+    </div>
     <div class="card" style="margin-top:18px" id="vzCard">
       <div class="vzhd"><div><h2>Visualização da prateleira</h2><div class="sub">3D para enxergar o volume (arraste para girar, role para aproximar) e mapa 2D por andar, visto de frente. Clique em uma posição para ver a amostra.</div></div>
         <div class="fbar"><label>Prateleira<select id="vzP"></select></label></div></div>
@@ -285,11 +304,11 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.26t' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.26t' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
-    el.innerHTML = app + ' · Script v' + v + (v < 6 ? ' <b style="color:#b42318">(desatualizado: implante a versão 6)</b>' : ''); }
+    el.innerHTML = app + ' · Script v' + v + (v < 7 ? ' <b style="color:#b42318">(desatualizado: implante a versão 7)</b>' : ''); }
   catch(e){ el.textContent = app + ' · Script: sem conexão'; }
 }
 mostrarVersao(URL);
@@ -384,10 +403,11 @@ function render(){
   renderConciliacao(true);
   renderPrateleiras();
   renderViz();
+  renderMapa();
   renderSalas();
   renderMovimentos();
   renderRefStatus();
-  $('#rodape').textContent = `Painel versão 2026.10.26t · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
+  $('#rodape').textContent = `Painel versão 2026.10.27a · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -623,6 +643,7 @@ function renderViz(){
   const s = VZ.sel && occ[VZ.sel]; $('#vzInfo').innerHTML = s ? tipAm(s, p).replace(/<br>/g,' · ') : '<span class="sub">Passe o mouse ou clique numa posição.</span>';
   ligarTips();
   cena3D(p, E, occ);
+  renderMapa();
 }
 $('#vzP').onchange = () => { VZ.num = +$('#vzP').value; VZ.lado = null; VZ.sel = null; renderViz(); };
 $('#vzCam').onclick = e => { const b = e.target.closest('[data-l]'); if(!b) return; VZ.lado = b.dataset.l; renderViz(); };
@@ -724,6 +745,65 @@ function vista3D(tipo){
   G3.cam.lookAt(0, cy, 0); G3.ctl.update(); desenhar3D();
 }
 function desenhar3D(){ if(G3.r && G3.cena) G3.r.render(G3.cena, G3.cam); }
+
+/* ---------- mapa da sala: 28 estantes (planta baixa do arquivo); cada vaga recebe o número de uma prateleira ---------- */
+const VAGAS = [[279,360,64,231],[279,597,64,231],[574,388,65,231],[574,626,65,231],[645,626,65,231],[932,388,65,231],[932,626,65,231],[1300,913,64,231],[1300,1150,64,231],[1300,1387,64,231],[469,1098,231,64],[706,1098,231,64],[943,1098,231,64],[469,1168,231,64],[706,1168,231,64],[943,1168,231,64],[469,1362,231,64],[706,1362,231,64],[943,1362,231,64],[469,1432,231,64],[706,1432,231,64],[943,1432,231,64],[279,1150,64,231],[279,1387,64,231],[343,1618,231,64],[585,1618,231,64],[827,1618,231,64],[1069,1618,231,64]].map(([x,y,w,h],i)=>({ id:'V'+String(i+1).padStart(2,'0'), x, y, w, h }));
+const MP = { vaga:null, salvando:false };
+function pratNaVaga(){ const m = {}; prateleiras().forEach(p=>{ if(p.mapa) m[p.mapa] = p; }); return m; }
+function corOcup(f){ // 0 → bege da planta; 1 → verde escuro
+  const a = [243,226,200], b = [31,122,92], t = Math.max(0, Math.min(1, f)); return `rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')})`; }
+function renderMapa(){
+  if(!$('#mapaSvg')) return;
+  const prats = prateleiras(), pp = L.perfisPrateleiras(EST, prats), naVaga = pratNaVaga();
+  const achado = VZ.sel ? +String(VZ.sel).split('-')[0] : null;
+  let g = '';
+  VAGAS.forEach(v=>{
+    const p = naVaga[v.id], x = p ? pp[p.numero] || { usadas:0 } : null, cap = p ? L.capPrateleira(p.embalagem, p.linhas) : 0, f = p && cap ? x.usadas/cap : 0;
+    const vert = v.h > v.w, cx = v.x + v.w/2, cy = v.y + v.h/2, rot = vert ? ` transform="rotate(-90 ${cx} ${cy})"` : '';
+    const cls = 'vg' + (p && p.numero===VZ.num ? ' on' : '') + (p && achado===p.numero ? ' achado' : '');
+    const tip = p ? `<b>P.${L.p2(p.numero)}</b> · ${esc(L.nomeEmb(p.embalagem))}<br>${x.usadas} de ${cap} posições (${Math.round(f*100)}%)<br>Vaga ${v.id}` : `<b>Vaga ${v.id}</b><br>sem prateleira — clique para colocar`;
+    g += `<g class="${cls}" data-vaga="${v.id}" data-tip="${tip.replace(/"/g,'&quot;')}"><rect x="${v.x}" y="${v.y}" width="${v.w}" height="${v.h}" rx="3" fill="${p ? corOcup(f) : '#f3e2c8'}" ${p ? '' : 'stroke-dasharray="10 6"'}/>`
+      + (p ? `<text x="${cx}" y="${cy-4}" text-anchor="middle" font-size="34" font-weight="800" fill="${f>0.55?'#fff':'#173f35'}"${rot}>P.${L.p2(p.numero)}</text><text x="${cx}" y="${cy+24}" text-anchor="middle" font-size="19" fill="${f>0.55?'#e8f3ee':'#3f5a53'}"${rot}>${p.embalagem==='KRAFT'?'kraft':p.embalagem==='CX05'?'0,5 kg':'1 kg'} · ${x.usadas}/${cap}</text>`
+           : `<text x="${cx}" y="${cy+8}" text-anchor="middle" font-size="24" fill="#9b8462"${rot}>${v.id}</text>`) + `</g>`;
+  });
+  $('#mapaSvg').innerHTML = `<svg viewBox="150 240 1290 1500" role="img" aria-label="Planta baixa do arquivo com as estantes">
+    <rect x="247" y="286" width="1148" height="1427" fill="#5c5c5c"/><rect x="270" y="308" width="1103" height="1384" fill="#2f6fb5"/><rect x="279" y="317" width="1086" height="1366" fill="#fff"/>
+    <rect x="1003" y="308" width="370" height="597" fill="#5c5c5c"/><rect x="1024" y="317" width="341" height="567" fill="#f4f7f5"/>
+    <text x="1194" y="590" text-anchor="middle" font-size="30" font-weight="800" fill="#173f35">SALA</text><text x="1194" y="626" text-anchor="middle" font-size="30" font-weight="800" fill="#173f35">REFRIGERADA</text>
+    <rect x="240" y="878" width="40" height="143" fill="#fff"/><path d="M247 878 A 175 143 0 0 1 422 1021 L 247 1021" fill="none" stroke="#333" stroke-width="2"/>
+    <text x="200" y="950" text-anchor="middle" font-size="22" fill="#555" transform="rotate(-90 200 950)">acesso (corredor)</text>
+    <text x="732" y="1000" text-anchor="middle" font-size="32" font-weight="800" fill="#c7d3cd">ARQUIVO DE AMOSTRAS</text>${g}</svg>`;
+  // painel lateral
+  const v = VAGAS.find(x=>x.id===MP.vaga), livres = prats.filter(p=>!p.mapa || (v && p.mapa===v.id));
+  const legenda = `<div class="leg"><span><i style="background:${corOcup(0)}"></i>vazia</span><span><i style="background:${corOcup(0.5)}"></i>50%</span><span><i style="background:${corOcup(1)}"></i>cheia</span><span><i style="background:#f3e2c8;border:1px dashed #8a6a3a"></i>sem prateleira</span></div>`;
+  const semVaga = prats.filter(p=>!p.mapa);
+  if(!v){ $('#mapaInfo').innerHTML = `<div class="box"><b>Clique numa estante</b><div class="sub" style="margin:0">Escolha a vaga no mapa e depois o número da prateleira que fica nela.</div></div>${legenda}`
+      + (semVaga.length ? `<div class="sub" style="margin:0">Prateleiras ainda sem lugar no mapa: ${semVaga.map(p=>'P.'+L.p2(p.numero)).join(', ')}</div>` : ''); ligarTips(); return; }
+  const p = naVaga[v.id];
+  $('#mapaInfo').innerHTML = `<div class="box"><b>Vaga ${v.id}</b>
+    ${p ? `<div>Prateleira <b>P.${L.p2(p.numero)}</b> · ${esc(L.nomeEmb(p.embalagem))}</div><div class="row2"><button class="btn sec" id="mpVer">Ver esta prateleira</button><button class="btn sec" id="mpTirar">Tirar do mapa</button></div>` : '<div class="sub" style="margin:0">Sem prateleira nesta vaga.</div>'}
+    <label class="sub" style="margin:0">${p ? 'Trocar por' : 'Colocar a prateleira'}</label>
+    <div class="row2"><select id="mpSel"><option value="">— escolha —</option>${prats.filter(x=>!p || x.numero!==p.numero).map(x=>`<option value="${x.numero}">P.${L.p2(x.numero)} · ${esc(L.nomeEmb(x.embalagem))}${x.mapa?' (hoje na '+x.mapa+')':''}</option>`).join('')}</select><button class="btn" id="mpSalvar">Salvar</button></div>
+    <div id="mpMsg"></div></div>${legenda}`;
+  ligarTips();
+  if($('#mpVer')) $('#mpVer').onclick = () => { VZ.num = p.numero; VZ.lado = null; VZ.sel = null; renderViz(); renderMapa(); $('#vzCard').scrollIntoView({ behavior:'smooth', block:'start' }); };
+  if($('#mpTirar')) $('#mpTirar').onclick = () => salvarMapa([Object.assign({}, p, { mapa:'' })]);
+  $('#mpSalvar').onclick = () => { const n = +$('#mpSel').value; if(!n){ $('#mpMsg').innerHTML = '<div class="sub">Escolha uma prateleira.</div>'; return; }
+    const nova = prats.find(x=>x.numero===n), muda = [Object.assign({}, nova, { mapa:v.id })]; if(p) muda.push(Object.assign({}, p, { mapa:'' }));
+    salvarMapa(muda); };
+}
+async function salvarMapa(lista){
+  if(MP.salvando) return; MP.salvando = true; const msg = $('#mpMsg'); if(msg) msg.innerHTML = '<div class="sub">Salvando…</div>';
+  try{
+    const prats = lista.map(p=>({ id:p.id, numero:p.numero, embalagem:p.embalagem, situacao:p.situacao||'Ativa', obs:p.obs||'', linhas:p.linhas||'', mapa:p.mapa||'' }));
+    await post({ prateleiras:prats, usuario: SESSAO && SESSAO.nome || '' });
+    // aplica já na tela; a próxima atualização confirma pela planilha
+    prats.forEach(n=>{ const i = (DADOS.prateleiras||[]).findIndex(x=>x.id===n.id); if(i>=0) DADOS.prateleiras[i] = Object.assign({}, DADOS.prateleiras[i], { mapa:n.mapa }); });
+    renderMapa(); if(DADOS && DADOS.versao < 7 && $('#mpMsg')) $('#mpMsg').innerHTML = '<div class="alert warn">O script da planilha precisa estar na versão 7 para guardar o mapa.</div>';
+  }catch(e){ if($('#mpMsg')) $('#mpMsg').innerHTML = `<div class="alert bad">${esc(e.message||e)}</div>`; }
+  finally{ MP.salvando = false; }
+}
+$('#mapaSvg').addEventListener('click', e=>{ const g = e.target.closest('[data-vaga]'); if(!g) return; MP.vaga = MP.vaga===g.dataset.vaga ? null : g.dataset.vaga; renderMapa(); });
 
 /* ---------- impressão das etiquetas de endereço (mesmo modelo do app) ---------- */
 function htmlEtiqueta(et){

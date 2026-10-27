@@ -124,7 +124,9 @@
   /* Caixinha de 0,5 kg na prateleira de 1 kg: cabem 2 na profundidade de cada metade (9 + 9 = 18 cm),
      então ela usa as 4 posições da 0,5 kg (Trás 02 · Trás 01 · Frente 02 · Frente 01). Cada metade (Trás ou Frente)
      de uma linha/andar é uma coluna só de 1 kg OU só de 0,5 kg — não se empilha uma sobre a outra. */
-  const ladosPara = (embAmostra, pr) => (pr.embalagem === 'CX1' && embAmostra === 'CX05') ? EMBALAGENS.CX05.lados : EMBALAGENS[pr.embalagem].lados;
+  // segundo argumento: a embalagem do andar (texto) ou um objeto com .embalagem; '' = andar livre (usa a da amostra)
+  const ladosPara = (embAmostra, x) => { const k = typeof x === 'string' ? x : (x && x.embalagem) || ''; const ea = EMBALAGENS[k] ? k : embAmostra;
+    return (ea === 'CX1' && embAmostra === 'CX05') ? EMBALAGENS.CX05.lados : (EMBALAGENS[ea] || EMBALAGENS[embAmostra]).lados; };
   const metadeLado = l => String(l || '').charAt(0);
   const ehSubLado = l => String(l || '').length === 2;
   /* Ocupação por ESPAÇO de 0,5 kg (9 × 9 × 9 cm): na profundidade de cada metade cabem 2 espaços
@@ -144,19 +146,42 @@
     if (slot.altura > 1) {
       const falta = cs.filter(c => !cel[chaveCel(slot, c, slot.altura - 1)]);
       if (falta.length) { let h = 1; while (h < slot.altura && !cs.every(c => !cel[chaveCel(slot, c, h)] && (h === 1 || cel[chaveCel(slot, c, h - 1)]))) h++;
-        return 'Não pode: ' + (cs.length > 1 && falta.length < cs.length ? 'falta apoio embaixo de metade da caixinha (' + nomeLado(falta[0]) + ' na altura ' + nomeAlt(slot.altura - 1) + ' está vazia)' : 'a posição abaixo (' + nomeAlt(slot.altura - 1) + ') está vazia') + '; a caixinha precisa ficar apoiada.' + (h < slot.altura ? ' Use a altura ' + nomeAlt(h) + ' desta pilha.' : ' Preencha primeiro o espaço vazio embaixo.'); }
+        return 'Não pode: ' + (cs.length > 1 && falta.length < cs.length ? 'falta apoio embaixo de metade da caixinha (' + nomeLado(falta[0]) + ' na altura ' + nomeAlt(slot.altura - 1) + ' está vazia)' : 'a posição abaixo (' + nomeAlt(slot.altura - 1) + ') está vazia') + '; precisa ficar apoiada.' + (h < slot.altura ? ' Use a altura ' + nomeAlt(h) + ' desta pilha.' : ' Preencha primeiro o espaço vazio embaixo.'); }
     }
     return '';
   }
   const nomeEmbAceitas = e => e === 'CX05' ? 'Caixinha 0,5 kg ou 1 kg' : nomeEmb(e);
-  const nomeEmb = k => (EMBALAGENS[k] || {}).nome || k || '—';
+  const nomeEmb = k => k === 'MISTO' ? 'Misto' : k === '' ? 'Livre' : (EMBALAGENS[k] || {}).nome || k || '—';
   const capLinha = k => { const e = EMBALAGENS[k]; return e ? e.lados.length * e.alturas : 0; };
   // linhas por andar: 15 por padrão nas caixinhas; algumas prateleiras só comportam 14 (definido no cadastro)
   const LINHAS_OPCOES = { CX1: [14, 15], CX05: [14, 15] };
-  const nLinhas = (k, lin) => { const e = EMBALAGENS[k]; return e ? (Number(lin) > 0 ? Number(lin) : e.linhas) : 0; };
-  const dimPrat = pr => Object.assign({}, EMBALAGENS[pr.embalagem], { linhas: nLinhas(pr.embalagem, pr.linhas) });
+  const nLinhas = (k, lin) => { const e = EMBALAGENS[k]; return e ? (LINHAS_OPCOES[k] && Number(lin) > 0 ? Number(lin) : e.linhas) : 0; };
+  /* ---------- Embalagem por ANDAR ----------
+     Cada andar tem a sua embalagem (caixinha 1 kg, 0,5 kg ou saco kraft) ou é "livre" (assume a da 1ª amostra).
+     pr.andares = "CX1,CX1,KRAFT,KRAFT" (A.01..A.04); sem esse campo, vale pr.embalagem nos 4 andares (prateleiras antigas). */
+  const EMB_CODIGOS = ['CX1', 'CX05', 'KRAFT'];
+  function andaresDe(pr) {
+    if (!pr) return ['', '', '', ''];
+    let a = pr.andares; if (typeof a === 'string') a = a ? a.split(',') : null;
+    if (Array.isArray(a) && a.length) return [0, 1, 2, 3].map(i => EMB_CODIGOS.indexOf(String(a[i] || '').trim()) >= 0 ? String(a[i]).trim() : '');
+    const e = EMB_CODIGOS.indexOf(pr.embalagem) >= 0 ? pr.embalagem : ''; return [e, e, e, e];
+  }
+  const resumoEmb = arr => { const u = [...new Set(arr)]; return u.length === 1 && u[0] ? u[0] : 'MISTO'; };
+  // embalagem do andar; se for livre e houver estado, a da primeira amostra do andar ('' = livre e vazio)
+  function embAndar(pr, a, est) {
+    const f = andaresDe(pr)[a - 1]; if (f || !est || !pr) return f;
+    for (const e of Object.values(est)) { const s = e.slot; if (s && (e.status === 'ARQUIVO' || e.status === 'SALA') && Number(s.prateleira) === Number(pr.numero) && s.andar === a) return e.embalagem || ''; }
+    return '';
+  }
+  // resumo para exibir: embalagem única, 'MISTO' ou '' (todos os andares livres e vazios)
+  const embPrat = (pr, est) => { const arr = [1, 2, 3, 4].map(a => embAndar(pr, a, est)); return arr.every(k => !k) ? '' : resumoEmb(arr); };
+  function dimAndar(pr, a, est, padrao) { const k = embAndar(pr, a, est) || padrao || ''; const e = EMBALAGENS[k]; return e ? Object.assign({}, e, { codigo: k, linhas: nLinhas(k, pr.linhas) }) : null; }
+  const dimPrat = (pr, a, est) => dimAndar(pr, a || 1, est, 'CX1');
+  const temCaixinha = pr => andaresDe(pr).some(k => !k || LINHAS_OPCOES[k]);
   const capAndar = (k, lin) => nLinhas(k, lin) * capLinha(k);
   const capPrateleira = (k, lin) => capAndar(k, lin) * ANDARES;
+  const capAndarPr = (pr, a, est) => { const k = embAndar(pr, a, est); return k ? capAndar(k, pr.linhas) : 0; };
+  const capPrat = (pr, est) => [1, 2, 3, 4].reduce((s, a) => s + capAndarPr(pr, a, est), 0);
   const nomeLado = l => ({ T: 'Trás', F: 'Frente', T1: 'Trás 01', T2: 'Trás 02', F1: 'Frente 01', F2: 'Frente 02' })[l] || l;
   const nomeAltura = (k, h) => (EMBALAGENS[k] && EMBALAGENS[k].letras) ? String.fromCharCode(64 + h) : String(h).padStart(2, '0');
   const p2 = n => String(n).padStart(2, '0');
@@ -166,9 +191,9 @@
     return 'P.' + p2(s.prateleira) + ' | A.' + p2(s.andar) + ' | L.' + p2(s.linha) + ' · ' + nomeLado(s.lado) + ' · ' + nomeAltura(emb, s.altura);
   }
   // ordem de preenchimento: andar 1→4, linha 1→N, do fundo para a frente (Trás antes da Frente), de baixo para cima
-  function* ordemSlots(prateleira, emb, lin) {
+  function* ordemSlots(prateleira, emb, lin, so) {
     const e = EMBALAGENS[emb]; if (!e) return; const nl = nLinhas(emb, lin);
-    for (let a = 1; a <= ANDARES; a++) for (let l = 1; l <= nl; l++) for (const lado of e.lados) for (let h = 1; h <= e.alturas; h++)
+    for (let a = so || 1; a <= (so || ANDARES); a++) for (let l = 1; l <= nl; l++) for (const lado of e.lados) for (let h = 1; h <= e.alturas; h++)
       yield { prateleira: prateleira, andar: a, linha: l, lado: lado, altura: h };
   }
 
@@ -216,7 +241,7 @@
       if (!e.slot || !(e.status === 'ARQUIVO' || e.status === 'SALA')) return;
       const k = e.slot.prateleira; const pr = r[k] || (r[k] = novo({ numero: k, embalagem: e.embalagem, situacao: 'Ativa' }));
       const an = pr.andares[e.slot.andar] || (pr.andares[e.slot.andar] = { perfil: null, usadas: 0 });
-      if (!an.perfil) an.perfil = perfil(e, pr.prateleira.embalagem || e.embalagem);
+      if (!an.perfil) { an.emb = andaresDe(pr.prateleira)[e.slot.andar - 1] || e.embalagem || ''; an.perfil = perfil(e, an.emb); }
       an.usadas++; pr.usadas++; pr.amostras.push(e);
     });
     Object.values(r).forEach(pr => {
@@ -229,20 +254,23 @@
   function sugerirPosicao(amostra, embalagem, est, prateleiras, excetoProt) {
     const ests = Object.assign({}, est); if (excetoProt) delete ests[excetoProt];
     const cel = celulasOcupadas(ests), pp = perfisPrateleiras(ests, prateleiras);
-    // prateleiras da própria embalagem primeiro; a caixinha de 0,5 kg pode seguir depois para as de 1 kg
-    const ativas = (prateleiras || []).filter(p => p.situacao !== 'Inativa' && cabeNa(embalagem, p.embalagem))
-      .sort((a, b) => (a.embalagem === embalagem ? 0 : 1) - (b.embalagem === embalagem ? 0 : 1) || a.numero - b.numero);
-    const livre = (pr, a) => { const emb = (pr.embalagem === 'CX1' && embalagem === 'CX05') ? 'CX05' : pr.embalagem;
-      for (const s of ordemSlots(pr.numero, emb, pr.linhas)) if (s.andar === a && !checarEspaco(cel, s, h => nomeAltura(pr.embalagem, h))) return s; return null; };
-    const obs = pr => pr.embalagem !== embalagem ? ' (caixinha de 0,5 kg na prateleira de 1 kg)' : '';
-    const perfilAndar = (pr, a) => { const x = pp[pr.numero]; return x && x.andares[a] ? x.andares[a].perfil : null; };
+    // andares que aceitam esta embalagem: os da própria embalagem primeiro, depois os livres, depois (0,5 kg) os de 1 kg
+    const cands = [];
+    (prateleiras || []).filter(p => p.situacao !== 'Inativa').forEach(pr => { for (let a = 1; a <= ANDARES; a++) {
+      const ea = embAndar(pr, a, ests); if (ea && !cabeNa(embalagem, ea)) continue; cands.push({ pr, a, ea }); } });
+    const rank = c => c.ea === embalagem ? 0 : c.ea === '' ? 1 : 2;
+    cands.sort((x, y) => rank(x) - rank(y) || x.pr.numero - y.pr.numero || x.a - y.a);
+    const livre = c => { const k = c.ea || embalagem, emb = (k === 'CX1' && embalagem === 'CX05') ? 'CX05' : k;
+      for (const s of ordemSlots(c.pr.numero, emb, c.pr.linhas, c.a)) if (!checarEspaco(cel, s, h => nomeAltura(k, h))) return s; return null; };
+    const obs = c => c.ea === 'CX1' && embalagem === 'CX05' ? ' (caixinha de 0,5 kg em andar de 1 kg)' : c.ea === '' ? ' (andar livre: passa a ser de ' + nomeEmb(embalagem) + ')' : '';
+    const perfilAndar = c => { const x = pp[c.pr.numero]; return x && x.andares[c.a] ? x.andares[c.a].perfil : null; };
     // 1º: andar que já tem o mesmo perfil (continua a sequência)
-    for (const pr of ativas) for (let a = 1; a <= ANDARES; a++) { const pa = perfilAndar(pr, a);
-      if (pa && chavePerfil(pa) === chavePerfil(perfil(amostra, pr.embalagem))) { const s = livre(pr, a); if (s) return { slot: s, embPrat: pr.embalagem, motivo: 'Continua a sequência do andar A.' + p2(a) + ' da prateleira ' + p2(pr.numero) + obs(pr) }; } }
+    for (const c of cands) { const pa = perfilAndar(c);
+      if (pa && chavePerfil(pa) === chavePerfil(perfil(amostra, c.ea || embalagem))) { const s = livre(c); if (s) return { slot: s, embPrat: c.ea || embalagem, motivo: 'Continua a sequência do andar A.' + p2(c.a) + ' da prateleira ' + p2(c.pr.numero) + obs(c) }; } }
     // 2º: andar vazio (passa a ser deste perfil)
-    for (const pr of ativas) for (let a = 1; a <= ANDARES; a++) { if (perfilAndar(pr, a)) continue;
-      const s = livre(pr, a); if (s) return { slot: s, embPrat: pr.embalagem, motivo: 'Andar A.' + p2(a) + ' da prateleira ' + p2(pr.numero) + ' livre (passa a ser deste perfil)' + obs(pr) }; }
-    return { slot: null, motivo: ativas.length ? 'Nenhum andar de ' + nomeEmbAceitas(embalagem) + ' livre para este perfil. Cadastre uma nova prateleira.' : 'Nenhuma prateleira de ' + nomeEmbAceitas(embalagem) + ' cadastrada.' };
+    for (const c of cands) { if (perfilAndar(c)) continue;
+      const s = livre(c); if (s) return { slot: s, embPrat: c.ea || embalagem, motivo: 'Andar A.' + p2(c.a) + ' da prateleira ' + p2(c.pr.numero) + ' livre (passa a ser deste perfil)' + obs(c) }; }
+    return { slot: null, motivo: cands.length ? 'Nenhum andar de ' + nomeEmbAceitas(embalagem) + ' livre para este perfil. Cadastre uma nova prateleira (ou um andar desta embalagem).' : 'Nenhum andar de ' + nomeEmbAceitas(embalagem) + ' cadastrado.' };
   }
   // confere se uma posição escolhida à mão respeita as regras
   function validarPosicao(amostra, embalagem, slot, est, prateleiras, excetoProt) {
@@ -250,13 +278,15 @@
     const pr = (prateleiras || []).find(p => Number(p.numero) === Number(slot.prateleira));
     if (!pr) return ['Prateleira ' + slot.prateleira + ' não cadastrada.'];
     if (pr.situacao === 'Inativa') return ['Prateleira ' + p2(pr.numero) + ' está inativa.'];
-    if (!cabeNa(embalagem, pr.embalagem)) return ['A prateleira ' + p2(pr.numero) + ' é de ' + nomeEmb(pr.embalagem) + '.'];
-    const e = dimPrat(pr);
-    if (!(slot.andar >= 1 && slot.andar <= ANDARES && slot.linha >= 1 && slot.linha <= e.linhas && ladosPara(embalagem, pr).indexOf(slot.lado) >= 0 && slot.altura >= 1 && slot.altura <= e.alturas)) return ['Posição fora da capacidade da prateleira.'];
+    if (!(slot.andar >= 1 && slot.andar <= ANDARES)) return ['Posição fora da capacidade da prateleira.'];
     const ests = Object.assign({}, est); if (excetoProt) delete ests[excetoProt];
-    const msg = checarEspaco(celulasOcupadas(ests), slot, h => nomeAltura(pr.embalagem, h)); if (msg) return [msg];
+    const ea = embAndar(pr, slot.andar, ests);
+    if (ea && !cabeNa(embalagem, ea)) return ['O andar A.' + p2(slot.andar) + ' da prateleira ' + p2(pr.numero) + ' é de ' + nomeEmb(ea) + '.'];
+    const k = ea || embalagem, e = Object.assign({}, EMBALAGENS[k], { linhas: nLinhas(k, pr.linhas) });
+    if (!(slot.linha >= 1 && slot.linha <= e.linhas && ladosPara(embalagem, k).indexOf(slot.lado) >= 0 && slot.altura >= 1 && slot.altura <= e.alturas)) return ['Posição fora da capacidade do andar.'];
+    const msg = checarEspaco(celulasOcupadas(ests), slot, h => nomeAltura(k, h)); if (msg) return [msg];
     const x = perfisPrateleiras(ests, prateleiras)[pr.numero], pa = x && x.andares[slot.andar] && x.andares[slot.andar].perfil;
-    if (pa) { const m = motivosIncompat(perfil(amostra, pr.embalagem), pa); if (m.length) return m.map(t => 'Não pode: ' + t + '.'); }
+    if (pa) { const m = motivosIncompat(perfil(amostra, k), pa); if (m.length) return m.map(t => 'Não pode: ' + t + '.'); }
     return [];
   }
 
@@ -281,7 +311,7 @@
       if (!e.slot || e.status !== 'ARQUIVO') return;
       const pr = (prateleiras || []).find(p => Number(p.numero) === Number(e.slot.prateleira)), x = pp[e.slot.prateleira];
       const pa = x && x.andares[e.slot.andar] && x.andares[e.slot.andar].perfil, m = [];
-      if (pa) motivosIncompat(perfil(e, pr ? pr.embalagem : e.embalagem), pa).forEach(t => m.push(t));
+      if (pa) motivosIncompat(perfil(e, (pr && embAndar(pr, e.slot.andar, est)) || e.embalagem), pa).forEach(t => m.push(t));
       if (e.slot.altura > 1 && celulasLado(e.slot.lado).some(c => !cel[chaveCel(e.slot, c, e.slot.altura - 1)])) m.push('sem caixinha embaixo (sem apoio)');
       if (m.length) out.push({ e, motivos: m, perfilAndar: pa });
     });
@@ -517,10 +547,10 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.10.27o',
+    VERSAO_REGRAS: '2026.10.27p',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
-    EMBALAGENS, ANDARES, LINHAS_OPCOES, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
+    EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, andaresDe, resumoEmb, embPrat, embAndar, dimAndar, capAndarPr, capPrat, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, foraDaRegra, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
     ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };

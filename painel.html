@@ -7,9 +7,9 @@
 <title>Painel LASDM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<script src="regras.js?v=2026.10.27o"></script>
+<script src="regras.js?v=2026.10.27p"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27o'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27p'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -100,7 +100,9 @@ tbody tr:hover{background:#f7fbf9}
 .seg2 button[aria-pressed=true]{background:var(--ink);color:#fff}
 .m2d{display:flex;flex-direction:column;gap:6px}
 .m2d .an{display:grid;grid-template-columns:44px minmax(0,1fr);gap:6px;align-items:stretch}
-.m2d .an>b{font-size:12px;color:var(--ink-2);display:flex;align-items:center;justify-content:center;background:var(--hair);border-radius:6px}
+.m2d .an>b{font-size:12px;color:var(--ink-2);display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--hair);border-radius:6px}
+.m2d .an>b small{font-size:10px;font-weight:700;color:var(--muted);margin-top:1px}
+.m2d .an.livre .gr i:not(.oc){opacity:.45}
 .m2d .gr{display:grid;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:3px}
 .m2d .gr i{display:block;border-radius:2px;background:#eef2f0;min-height:3px;cursor:pointer;outline-offset:1px}
 .m2d .gr i.oc{box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
@@ -165,6 +167,7 @@ tbody tr:hover{background:#f7fbf9}
 .mapaInfo .box{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
 .mapaInfo select{height:38px;border:1.5px solid var(--line);border-radius:8px;padding:0 8px;background:var(--surface);color:var(--ink)}
 .mapaInfo .row2{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pandares .pemb{font-style:normal;font-weight:700;font-size:11px;flex:0 0 58px;color:var(--ink)}
 </style>
 </head>
 <body>
@@ -308,11 +311,11 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27o' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27o' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27p' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27p' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
-    el.innerHTML = app + ' · Script v' + v + (v < 7 ? ' <b style="color:#b42318">(desatualizado: implante a versão 7)</b>' : ''); }
+    el.innerHTML = app + ' · Script v' + v + (v < 8 ? ' <b style="color:#b42318">(desatualizado: implante a versão 8)</b>' : ''); }
   catch(e){ el.textContent = app + ' · Script: sem conexão'; }
 }
 mostrarVersao(URL);
@@ -374,7 +377,7 @@ function render(){
   if(!DADOS) return;
   const est = Object.values(EST), agora = Date.now(), hoje = dkey(new Date());
   const noArq = est.filter(e=>e.status==='ARQUIVO'), emSala = est.filter(e=>e.status==='SALA');
-  const prats = prateleiras(), cap = prats.filter(p=>p.situacao!=='Inativa').reduce((s,p)=>s+L.capPrateleira(p.embalagem, p.linhas),0);
+  const prats = prateleiras(), cap = prats.filter(p=>p.situacao!=='Inativa').reduce((s,p)=>s+L.capPrat(p, EST),0);
   const movHoje = MOVS.filter(m=>dkey(new Date(m.ts))===hoje && !/^Conflito/.test(m.situacao||''));
   const conflitos = MOVS.filter(m=>/^Conflito/.test(m.situacao||'') && !(EST[m.protocolo] && EST[m.protocolo].ultimo > m.ts));
   const salaAntiga = emSala.filter(e=>agora-e.desde > 3*86400000);
@@ -412,7 +415,7 @@ function render(){
   renderSalas();
   renderMovimentos();
   renderRefStatus();
-  $('#rodape').textContent = `Painel versão 2026.10.27o · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
+  $('#rodape').textContent = `Painel versão 2026.10.27p · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -431,17 +434,20 @@ function barrasDia(serie, S, W){
 function renderPrateleiras(){
   const prats = prateleiras(), pp = L.perfisPrateleiras(EST, prats);
   $('#prats').innerHTML = prats.length ? prats.map(p=>{
-    const x = pp[p.numero] || { usadas:0, amostras:[] }, capP = L.capPrateleira(p.embalagem, p.linhas), capA = L.capAndar(p.embalagem, p.linhas), G = x.perfil ? (L.GRUPOS[x.perfil.grupo]||L.GRUPOS.OUTROS) : null;
+    const x = pp[p.numero] || { usadas:0, amostras:[] }, capP = L.capPrat(p, EST), capA = [0,1,2,3,4].map(a=>L.capAndarPr(p, a, EST)), G = x.perfil ? (L.GRUPOS[x.perfil.grupo]||L.GRUPOS.OUTROS) : null;
     const porA = [1,2,3,4].map(a=>x.amostras.filter(e=>e.slot.andar===a).length);
-    return `<div class="prat clic" data-prat="${p.numero}" title="Ver em 3D e no mapa"><div class="hd"><span class="num">P.${L.p2(p.numero)}</span><span class="pill mut">${esc(L.nomeEmb(p.embalagem))}</span>${p.situacao==='Inativa'?'<span class="pill bad">Inativa</span>':''}<span style="margin-left:auto" class="v mono">${x.usadas}/${capP}</span></div>
-      ${andaresHTML(x)}
-      <div class="andares">${porA.map((n,i)=>`<div data-tip="<b>Andar ${L.p2(i+1)}</b><br>${n} de ${capA}<br>${esc(x.andares&&x.andares[i+1]&&x.andares[i+1].perfil?L.textoPerfil(x.andares[i+1].perfil):'livre')}"><i style="height:${n/capA*100}%"></i><span>A.${L.p2(i+1)}</span></div>`).join('')}</div></div>`; }).join('')
+    return `<div class="prat clic" data-prat="${p.numero}" title="Ver em 3D e no mapa"><div class="hd"><span class="num">P.${L.p2(p.numero)}</span><span class="pill mut">${esc(L.nomeEmb(L.embPrat(p,EST)))}</span>${p.situacao==='Inativa'?'<span class="pill bad">Inativa</span>':''}<span style="margin-left:auto" class="v mono">${x.usadas}/${capP}</span></div>
+      ${andaresHTML(x, p)}
+      <div class="andares">${porA.map((n,i)=>`<div data-tip="<b>Andar ${L.p2(i+1)}</b> · ${esc(L.nomeEmb(L.embAndar(p, i+1, EST)))}<br>${n} de ${capA[i+1]||'—'}<br>${esc(x.andares&&x.andares[i+1]&&x.andares[i+1].perfil?L.textoPerfil(x.andares[i+1].perfil):'livre')}"><i style="height:${capA[i+1]?n/capA[i+1]*100:0}%"></i><span>A.${L.p2(i+1)}</span></div>`).join('')}</div></div>`; }).join('')
     : '<div class="empty">Nenhuma prateleira cadastrada (cadastre pelo app).</div>';
 }
 /* perfil de cada andar (A.04 em cima, como na prateleira física) */
-function andaresHTML(x){
+function andaresHTML(x, pr){
+  // por andar: embalagem (curta) + perfil; A.04 em cima, como na prateleira física
+  const curta = k => k==='CX1' ? 'Cx 1 kg' : k==='CX05' ? 'Cx 0,5 kg' : k==='KRAFT' ? 'Kraft' : 'Livre';
+  const misto = pr && L.resumoEmb([1,2,3,4].map(a=>L.embAndar(pr, a, EST)))==='MISTO';
   return `<div class="pandares">${[4,3,2,1].map(a=>{ const an = x && x.andares && x.andares[a], p = an && an.perfil, G = p ? (L.GRUPOS[p.grupo]||L.GRUPOS.OUTROS) : null;
-    return `<div><b>A.${L.p2(a)}</b>${G?`<span class="swatch" style="background:${G.cor}"></span>`:''}<span>${esc(p ? L.textoPerfil(p) : 'livre')}</span></div>`; }).join('')}</div>`;
+    return `<div><b>A.${L.p2(a)}</b>${misto?`<em class="pemb">${esc(curta(L.embAndar(pr, a, EST)))}</em>`:''}${G?`<span class="swatch" style="background:${G.cor}"></span>`:''}<span>${esc(p ? L.textoPerfil(p) : 'livre')}</span></div>`; }).join('')}</div>`;
 }
 function renderFora(){
   const fr = L.foraDaRegra(EST, prateleiras()); $('#foraCard').hidden = !fr.length; if(!fr.length) return;
@@ -613,53 +619,64 @@ function slotsPrat(p){
 }
 const corAm = e => (L.GRUPOS[L.classificar(e).grupo] || L.GRUPOS.OUTROS).cor;
 const COR_SALA = '#e8913a';
-function tipAm(e, p){ return `<b class="mono">${esc(e.protocolo)}</b><br>${esc(L.textoSlot(e.slot, p.embalagem))}<br>${esc([e.especie, e.cultivar].filter(Boolean).join(' · '))}<br>${esc(e.remessa||e.classificacao||'')}${e.embalagem && e.embalagem!==p.embalagem ? '<br>'+esc(L.nomeEmb(e.embalagem)) : ''}${e.status==='SALA' ? '<br><b>Em sala:</b> '+esc(e.local) : ''}`; }
+function tipAm(e, p){ const ea = (e.slot && L.embAndar(p, e.slot.andar, EST)) || e.embalagem; return `<b class="mono">${esc(e.protocolo)}</b><br>${esc(L.textoSlot(e.slot, ea))}<br>${esc([e.especie, e.cultivar].filter(Boolean).join(' · '))}<br>${esc(e.remessa||e.classificacao||'')}${e.embalagem && e.embalagem!==ea ? '<br>'+esc(L.nomeEmb(e.embalagem)) : ''}${e.status==='SALA' ? '<br><b>Em sala:</b> '+esc(e.local) : ''}`; }
 function renderViz(){
   const prats = prateleiras().slice().sort((a,b)=>a.numero-b.numero);
   $('#vzCard').hidden = !prats.length; if(!prats.length) return;
   if(!prats.some(p=>p.numero===VZ.num)){ const pp = L.perfisPrateleiras(EST, prats); const c = prats.find(p=>(pp[p.numero]||{}).usadas) || prats[0]; VZ.num = c.numero; VZ.lado = null; }
-  $('#vzP').innerHTML = prats.map(p=>`<option value="${p.numero}">P.${L.p2(p.numero)} · ${esc(L.nomeEmb(p.embalagem))}${L.LINHAS_OPCOES[p.embalagem]&&L.nLinhas(p.embalagem,p.linhas)!==15?' · '+L.nLinhas(p.embalagem,p.linhas)+' linhas':''}</option>`).join(''); $('#vzP').value = VZ.num;
-  const p = prats.find(x=>x.numero===VZ.num), E = L.dimPrat(p), occ = slotsPrat(p);
-  // prateleira de 1 kg com caixinhas de 0,5 kg: mostra as 4 camadas (a caixinha de 1 kg aparece nas duas camadas da sua metade)
-  const sub = p.embalagem==='CX1' && Object.values(occ).some(e=>L.ehSubLado(e.slot.lado));
-  const camadas = sub ? L.EMBALAGENS.CX05.lados : E.lados;
-  const naCamada = (a, li, al, lado) => occ[L.chaveSlot({ prateleira:p.numero, andar:a, linha:li, lado, altura:al })] || (sub ? occ[L.chaveSlot({ prateleira:p.numero, andar:a, linha:li, lado:lado.charAt(0), altura:al })] : null);
+  $('#vzP').innerHTML = prats.map(p=>`<option value="${p.numero}">P.${L.p2(p.numero)} · ${esc(L.nomeEmb(L.embPrat(p,EST)))}${L.temCaixinha(p)&&L.nLinhas('CX1',p.linhas)!==15?' · '+L.nLinhas('CX1',p.linhas)+' linhas':''}</option>`).join(''); $('#vzP').value = VZ.num;
+  const p = prats.find(x=>x.numero===VZ.num), occ = slotsPrat(p);
+  // cada andar com a sua embalagem (andar livre e vazio: desenhado como caixinha de 1 kg, apagado)
+  const DA = VZ.DA = [null,1,2,3,4].map(a=>a && Object.assign(L.dimAndar(p, a, EST, 'CX1'), { livre: !L.embAndar(p, a, EST) }));
+  // profundidade: 4 camadas se houver caixinhas de 0,5 kg (andar de 0,5 kg ou 0,5 kg num andar de 1 kg); a de 1 kg aparece nas duas camadas da sua metade
+  const sub = DA.some(d=>d && d.codigo==='CX05') || Object.values(occ).some(e=>L.ehSubLado(e.slot.lado));
+  const camadas = sub ? L.EMBALAGENS.CX05.lados : ['T','F'];
+  const ladoNo = (a, lado) => (DA[a].lados.indexOf(lado)>=0 || DA[a].codigo==='CX1') ? lado : lado.charAt(0);
+  const naCamada = (a, li, al, lado) => occ[L.chaveSlot({ prateleira:p.numero, andar:a, linha:li, lado, altura:al })] || (lado.length===2 ? occ[L.chaveSlot({ prateleira:p.numero, andar:a, linha:li, lado:lado.charAt(0), altura:al })] : null);
   if(VZ.lado && VZ.lado.length===1 && camadas.indexOf(VZ.lado)<0) VZ.lado += '1';  // caixinha de 1 kg localizada numa prateleira com camadas de 0,5 kg
+  if(VZ.lado && VZ.lado.length===2 && camadas.indexOf(VZ.lado)<0) VZ.lado = VZ.lado.charAt(0);
   if(!VZ.lado || camadas.indexOf(VZ.lado)<0) VZ.lado = camadas[camadas.length-1];
   document.querySelectorAll('#prats .prat').forEach(el=>el.classList.toggle('on', +el.dataset.prat===VZ.num));
   // legenda: grupos presentes
   const grupos = [...new Set(Object.values(occ).map(e=>L.classificar(e).grupo))];
   $('#vzLeg').innerHTML = grupos.map(g=>{ const G = L.GRUPOS[g]||L.GRUPOS.OUTROS; return `<span><i style="background:${G.cor}"></i>${esc(G.curto||g)}</span>`; }).join('')
     + `<span><i style="background:#eef2f0"></i>Livre</span>`
-    + (sub ? `<span><i style="background:linear-gradient(#83E28E 50%,#d9f4dc 50%)"></i>Caixinha 0,5 kg</span>` : '');
+    + (Object.values(occ).some(e=>L.ehSubLado(e.slot.lado) && DA[e.slot.andar].codigo==='CX1') ? `<span><i style="background:linear-gradient(#83E28E 50%,#d9f4dc 50%)"></i>Caixinha 0,5 kg</span>` : '');
   // camadas (profundidade)
   $('#vzCam').innerHTML = camadas.slice().reverse().map(l=>`<button data-l="${l}" aria-pressed="${l===VZ.lado}">${esc(L.nomeLado(l))}</button>`).join('');
-  const n = Object.keys(occ).length, cap = L.capPrateleira(p.embalagem, p.linhas);
+  const n = Object.keys(occ).length, cap = L.capPrat(p, EST);
   $('#vzCont').textContent = `${n} de ${cap} posições ocupadas`;
-  // mapa 2D: um quadro por andar (A.04 em cima), linhas nas colunas, alturas nas linhas (A embaixo)
+  // mapa 2D: um quadro por andar (A.04 em cima), cada um com a grade da sua embalagem; linhas nas colunas, alturas nas linhas (A embaixo)
+  const misto = L.embPrat(p, EST)==='MISTO', mesmas = new Set([1,2,3,4].map(a=>DA[a].linhas)).size===1;
+  const curta = d => d.livre ? 'Livre' : d.codigo==='CX1' ? '1 kg' : d.codigo==='CX05' ? '0,5 kg' : 'Kraft';
+  const eixo = nl => `<div class="eixo"><span></span><div style="grid-template-columns:repeat(${nl},minmax(0,1fr))">${Array.from({length:nl},(_,i)=>`<span><i class="lp">L.</i>${L.p2(i+1)}</span>`).join('')}</div></div>`;
   let h = '';
   for(let a=4; a>=1; a--){
-    let cel = '';
+    const E = DA[a], ld = ladoNo(a, VZ.lado); let cel = '';
     for(let al=E.alturas; al>=1; al--) for(let li=1; li<=E.linhas; li++){
-      const e = naCamada(a, li, al, VZ.lado), k = e ? L.chaveSlot(e.slot) : L.chaveSlot({ prateleira:p.numero, andar:a, linha:li, lado:VZ.lado, altura:al });
-      const cls = e ? 'oc' + (e.status==='SALA' ? ' sala' : '') + (L.ehSubLado(e.slot.lado) && p.embalagem==='CX1' ? ' meia' : '') : '';
-      const tip = e ? tipAm(e, p) : `<b>Livre</b><br>${esc(L.textoSlot({ prateleira:p.numero, andar:a, linha:li, lado:VZ.lado, altura:al }, p.embalagem))}`;
+      const s0 = { prateleira:p.numero, andar:a, linha:li, lado:ld, altura:al }, e = naCamada(a, li, al, ld), k = e ? L.chaveSlot(e.slot) : L.chaveSlot(s0);
+      const cls = e ? 'oc' + (e.status==='SALA' ? ' sala' : '') + (L.ehSubLado(e.slot.lado) && E.codigo==='CX1' ? ' meia' : '') : '';
+      const tip = e ? tipAm(e, p) : `<b>Livre</b><br>${esc(L.textoSlot(s0, E.codigo))}${E.livre ? '<br>Andar livre: assume a embalagem da 1ª amostra' : ''}`;
       cel += `<i class="${cls}${VZ.sel===k?' sel':''}" data-k="${k}" style="${e?'background-color:'+(e.status==='SALA'?COR_SALA:corAm(e)):''}" data-tip="${tip.replace(/"/g,'&quot;')}"></i>`;
     }
-    const alt = E.alturas>10 ? 'min-height:3px' : '';
-    h += `<div class="an"><b>A.${L.p2(a)}</b><div class="gr" style="grid-template-columns:repeat(${E.linhas},minmax(0,1fr));grid-auto-rows:${E.alturas>10?'3px':'14px'};gap:${E.alturas>10?'1px 2px':'2px'}">${cel}</div></div>`;
+    h += `<div class="an${E.livre?' livre':''}"><b>A.${L.p2(a)}${misto?`<small>${curta(E)}</small>`:''}</b><div class="gr" style="grid-template-columns:repeat(${E.linhas},minmax(0,1fr));grid-auto-rows:${E.alturas>10?'3px':'14px'};gap:${E.alturas>10?'1px 2px':'2px'}">${cel}</div></div>`
+      + (mesmas ? '' : eixo(E.linhas));
   }
-  h += `<div class="eixo"><span></span><div style="grid-template-columns:repeat(${E.linhas},minmax(0,1fr))">${Array.from({length:E.linhas},(_,i)=>`<span><i class="lp">L.</i>${L.p2(i+1)}</span>`).join('')}</div></div>`;
+  if(mesmas) h += eixo(DA[1].linhas);
   $('#vz2d').innerHTML = h;
-  // seletor de linha: L.01 até a última linha da prateleira (7 no kraft, 14 ou 15 nas caixinhas); a caixinha selecionada já preenche andar e linha
-  { const vl = +$('#impLin').value || 1; $('#impLin').innerHTML = Array.from({length:E.linhas},(_,i)=>`<option value="${i+1}">Linha ${L.p2(i+1)}</option>`).join(''); $('#impLin').value = Math.min(vl, E.linhas);
-    const se = VZ.sel && occ[VZ.sel]; if(se){ $('#impAndar').value = se.slot.andar; $('#impLin').value = se.slot.linha; } }
+  // seletor de linha: L.01 até a última linha do andar escolhido (7 no kraft, 14 ou 15 nas caixinhas); a caixinha selecionada já preenche andar e linha
+  { const se = VZ.sel && occ[VZ.sel]; if(se) $('#impAndar').value = se.slot.andar; montarImpLin(se ? se.slot.linha : null); }
   $('#impMsg').textContent = '';
   const s = VZ.sel && occ[VZ.sel]; $('#vzInfo').innerHTML = s ? tipAm(s, p).replace(/<br>/g,' · ') : '<span class="sub">Passe o mouse ou clique numa posição.</span>';
   ligarTips();
-  cena3D(p, E, occ);
+  cena3D(p, DA, occ);
   renderMapa();
 }
+function montarImpLin(lin){
+  const d = VZ.DA && VZ.DA[+$('#impAndar').value || 1], nl = d ? d.linhas : 15, vl = lin || +$('#impLin').value || 1;
+  $('#impLin').innerHTML = Array.from({length:nl},(_,i)=>`<option value="${i+1}">Linha ${L.p2(i+1)}</option>`).join(''); $('#impLin').value = Math.min(vl, nl);
+}
+$('#impAndar').onchange = () => montarImpLin();
 $('#vzP').onchange = () => { VZ.num = +$('#vzP').value; VZ.lado = null; VZ.sel = null; renderViz(); };
 $('#vzCam').onclick = e => { const b = e.target.closest('[data-l]'); if(!b) return; VZ.lado = b.dataset.l; renderViz(); };
 $('#vz2d').onclick = e => { const c = e.target.closest('[data-k]'); if(!c) return; VZ.sel = VZ.sel===c.dataset.k ? null : c.dataset.k; renderViz(); };
@@ -681,7 +698,7 @@ function rotulo3D(txt, tam){
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:tx, depthTest:false, transparent:true }));
   sp.scale.set(tam*4, tam, 1); return sp;
 }
-async function cena3D(p, E, occ){
+async function cena3D(p, DA, occ){
   const el = $('#vz3d');
   try{ await carregar3D(); }catch(e){ $('#vzMsg').hidden = false; $('#vzMsg').textContent = 'Não foi possível carregar a visão 3D (verifique a internet). O mapa 2D ao lado continua funcionando.'; return; }
   $('#vzMsg').hidden = true;
@@ -708,8 +725,10 @@ async function cena3D(p, E, occ){
   }
   G3.p = p;
   // dimensões (cm): caixinha 9×9×18 (1 kg), 9×9×9 (0,5 kg); saco kraft deitado, 30 por pilha
-  const cw = p.embalagem==='KRAFT' ? 19 : 9.4, W = cw*E.linhas, D = 38, cd = D/E.lados.length, Ha = 52, ch = 46/E.alturas, base = 10, frame = 4;
-  const chave = p.numero+'|'+p.embalagem+'|'+E.linhas;
+  // cada andar com a sua embalagem: largura da posição, número de linhas, camadas e alturas próprias
+  const cwA = a => DA[a].codigo==='KRAFT' ? 19 : 9.4, chA = a => 46/DA[a].alturas;
+  const W = Math.max(...[1,2,3,4].map(a=>cwA(a)*DA[a].linhas)), D = 38, Ha = 52, base = 10, frame = 4;
+  const chave = p.numero+'|'+[1,2,3,4].map(a=>DA[a].codigo+DA[a].linhas+(DA[a].livre?'l':'')).join(',');
   if(G3.chave !== chave){
     if(G3.grupo) G3.cena.remove(G3.grupo);
     const g = G3.grupo = new THREE.Group(); G3.dim = { W, D, Hm: base + Ha*4 };
@@ -719,12 +738,13 @@ async function cena3D(p, E, occ){
     [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([sx,sz])=>{ caixa(frame, topoEst+1, frame, sx*(W/2+frame/2), (topoEst+1)/2, sz*(D/2+frame/2), branco); caixa(frame+1.5, 2, frame+1.5, sx*(W/2+frame/2), 1, sz*(D/2+frame/2), cinza); });
     for(let a=0; a<4; a++){ const y = base + Ha*a; caixa(W+frame*2, 1.6, D+frame*2, 0, y-0.8, 0, branco); }
     for(let a=0; a<4; a++){ const s = rotulo3D('A.'+L.p2(a+1), 11); s.position.set(-W/2-frame-24, base + Ha*a + Ha*0.45, D/2); g.add(s); }
-    const s1 = rotulo3D('L.01', 9); s1.position.set(-W/2+cw/2, base-7, D/2+12); g.add(s1);
-    const s2 = rotulo3D('L.'+L.p2(E.linhas), 9); s2.position.set(W/2-cw/2, base-7, D/2+12); g.add(s2);
+    const s1 = rotulo3D('L.01', 9); s1.position.set(-W/2+cwA(1)/2, base-7, D/2+12); g.add(s1);
+    const s2 = rotulo3D('L.'+L.p2(DA[1].linhas), 9); s2.position.set(-W/2+cwA(1)*(DA[1].linhas-0.5), base-7, D/2+12); g.add(s2);
+    if(L.embPrat(p, EST)==='MISTO') for(let a=0; a<4; a++){ const d = DA[a+1], t = d.livre ? 'Livre' : d.codigo==='CX1' ? '1 kg' : d.codigo==='CX05' ? '0,5 kg' : 'Kraft', s = rotulo3D(t, 7); s.position.set(-W/2-frame-24, base + Ha*a + Ha*0.45 - 10, D/2); g.add(s); }
     const sf = rotulo3D('FRENTE', 9); sf.position.set(0, base-9, D/2+18); g.add(sf);
     const st = rotulo3D('TRÁS', 9); st.position.set(0, topoEst+Ha+10, -D/2-6); g.add(st);
     // posições livres (fantasma) e ocupadas
-    const tot = 4*E.linhas*E.lados.length*E.alturas, geo = new THREE.BoxGeometry(1,1,1);
+    const tot = [1,2,3,4].reduce((t,a)=>t + DA[a].linhas*Math.max(4, DA[a].lados.length)*DA[a].alturas, 0), geo = new THREE.BoxGeometry(1,1,1);
     G3.vz = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color:0x8fa69c, transparent:true, opacity:0.035, depthWrite:false }), tot); g.add(G3.vz);
     G3.oc = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color:0xffffff }), tot*2); g.add(G3.oc);
     G3.cena.add(g); G3.chave = chave; G3.vistaFeita = false; G3.bordas = null;
@@ -732,19 +752,19 @@ async function cena3D(p, E, occ){
   // posiciona as caixinhas
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(), cor = new THREE.Color();
   let iv = 0, io = 0; G3.itens = [];
-  const xyz = (s, il, nl) => [ -W/2 + (s.linha-0.5)*cw, base + Ha*(s.andar-1) + (s.altura-0.5)*ch, -D/2 + (il+0.5)*D/nl ];
+  const xyz = (s, il, nl) => [ -W/2 + (s.linha-0.5)*cwA(s.andar), base + Ha*(s.andar-1) + (s.altura-0.5)*chA(s.andar), -D/2 + (il+0.5)*D/nl ];
   // posições livres (fantasma): uma por posição da prateleira, se não houver nada nela (nem caixinha de 0,5 kg naquela metade)
-  const temSub = {}; Object.values(occ).forEach(e=>{ if(p.embalagem==='CX1' && L.ehSubLado(e.slot.lado)) temSub[[e.slot.andar, e.slot.linha, e.slot.lado.charAt(0), e.slot.altura].join('-')] = 1; });
-  for(let a=1; a<=4; a++) for(let li=1; li<=E.linhas; li++) E.lados.forEach((lado, il)=>{ for(let al=1; al<=E.alturas; al++){
+  const temSub = {}; Object.values(occ).forEach(e=>{ if(DA[e.slot.andar].codigo==='CX1' && L.ehSubLado(e.slot.lado)) temSub[[e.slot.andar, e.slot.linha, e.slot.lado.charAt(0), e.slot.altura].join('-')] = 1; });
+  for(let a=1; a<=4; a++){ const E = DA[a], cd = D/E.lados.length; for(let li=1; li<=E.linhas; li++) E.lados.forEach((lado, il)=>{ for(let al=1; al<=E.alturas; al++){
     const s0 = { prateleira:p.numero, andar:a, linha:li, lado, altura:al };
     if(occ[L.chaveSlot(s0)] || temSub[[a, li, lado.charAt(0), al].join('-')]) continue;
-    const [x,y,z] = xyz(s0, il, E.lados.length); m.compose(v.set(x,y,z), q, sc.set(cw*0.9, ch*0.86, cd*0.92)); G3.vz.setMatrixAt(iv++, m);
-  } });
+    const [x,y,z] = xyz(s0, il, E.lados.length); m.compose(v.set(x,y,z), q, sc.set(cwA(a)*0.9, chA(a)*(E.livre?0.6:0.86), cd*0.92)); G3.vz.setMatrixAt(iv++, m);
+  } }); }
   // caixinhas ocupadas; 0,5 kg na prateleira de 1 kg ocupa 1/4 da profundidade (Trás 02 · Trás 01 · Frente 02 · Frente 01)
   Object.entries(occ).forEach(([k, e])=>{
-    const sub = p.embalagem==='CX1' && L.ehSubLado(e.slot.lado), lados = sub ? L.EMBALAGENS.CX05.lados : E.lados, il = Math.max(0, lados.indexOf(e.slot.lado));
+    const E = DA[e.slot.andar] || DA[1], sub = E.codigo==='CX1' && L.ehSubLado(e.slot.lado), lados = sub ? L.EMBALAGENS.CX05.lados : E.lados, il = Math.max(0, lados.indexOf(e.slot.lado));
     const [x,y,z] = xyz(e.slot, il, lados.length), prof = D/lados.length;
-    m.compose(v.set(x,y,z), q, sc.set(cw*0.9, ch*0.86, prof*0.92)); G3.oc.setMatrixAt(io, m);
+    m.compose(v.set(x,y,z), q, sc.set(cwA(e.slot.andar)*0.9, chA(e.slot.andar)*0.86, prof*0.92)); G3.oc.setMatrixAt(io, m);
     cor.set(k===VZ.sel ? '#173f35' : e.status==='SALA' ? COR_SALA : corAm(e)); if(k!==VZ.sel && e.status!=='SALA') cor.lerp(new THREE.Color('#c9b48f'), 0.18);
     G3.oc.setColorAt(io, cor); G3.itens[io] = { k, e }; io++;
   });
@@ -781,10 +801,10 @@ function renderMapa(){
   const achado = VZ.sel ? +String(VZ.sel).split('-')[0] : null;
   let g = '';
   VAGAS.forEach(v=>{
-    const p = naVaga[v.id], x = p ? pp[p.numero] || { usadas:0 } : null, cap = p ? L.capPrateleira(p.embalagem, p.linhas) : 0, f = p && cap ? x.usadas/cap : 0;
+    const p = naVaga[v.id], x = p ? pp[p.numero] || { usadas:0 } : null, cap = p ? L.capPrat(p, EST) : 0, f = p && cap ? x.usadas/cap : 0;
     const vert = v.h > v.w, cx = v.x + v.w/2, cy = v.y + v.h/2, rot = vert ? ` transform="rotate(-90 ${cx} ${cy})"` : '';
     const cls = 'vg' + (p && p.numero===VZ.num ? ' on' : '') + (p && achado===p.numero ? ' achado' : '');
-    const tip = p ? `<b>P.${L.p2(p.numero)}</b> · ${esc(L.nomeEmb(p.embalagem))}<br>${x.usadas} de ${cap} posições (${Math.round(f*100)}%)<br>Vaga ${v.id}` : `<b>Vaga ${v.id}</b><br>sem prateleira — clique para colocar`;
+    const tip = p ? `<b>P.${L.p2(p.numero)}</b> · ${esc(L.nomeEmb(L.embPrat(p,EST)))}<br>${x.usadas} de ${cap} posições (${Math.round(f*100)}%)<br>Vaga ${v.id}` : `<b>Vaga ${v.id}</b><br>sem prateleira — clique para colocar`;
     g += `<g class="${cls}" data-vaga="${v.id}" data-tip="${tip.replace(/"/g,'&quot;')}"><rect x="${v.x}" y="${v.y}" width="${v.w}" height="${v.h}" rx="3" fill="${p ? corOcup(f) : '#f3e2c8'}" ${p ? '' : 'stroke-dasharray="10 6"'}/>`
       + (p ? `<text x="${cx}" y="${cy-4}" text-anchor="middle" font-size="34" font-weight="800" fill="${f>0.55?'#fff':'#173f35'}"${rot}>P.${L.p2(p.numero)}</text><text x="${cx}" y="${cy+24}" text-anchor="middle" font-size="19" fill="${f>0.55?'#e8f3ee':'#3f5a53'}"${rot}>${p.embalagem==='KRAFT'?'kraft':p.embalagem==='CX05'?'0,5 kg':'1 kg'} · ${x.usadas}/${cap}</text>`
            : `<text x="${cx}" y="${cy+8}" text-anchor="middle" font-size="24" fill="#9b8462"${rot}>${v.id}</text>`) + `</g>`;
@@ -804,9 +824,9 @@ function renderMapa(){
       + (semVaga.length ? `<div class="sub" style="margin:0">Prateleiras ainda sem lugar no mapa: ${semVaga.map(p=>'P.'+L.p2(p.numero)).join(', ')}</div>` : ''); ligarTips(); return; }
   const p = naVaga[v.id];
   $('#mapaInfo').innerHTML = `<div class="box"><b>Vaga ${v.id}</b>
-    ${p ? `<div>Prateleira <b>P.${L.p2(p.numero)}</b> · ${esc(L.nomeEmb(p.embalagem))}</div><div class="row2"><button class="btn sec" id="mpVer">Ver esta prateleira</button><button class="btn sec" id="mpTirar">Tirar do mapa</button></div>` : '<div class="sub" style="margin:0">Sem prateleira nesta vaga.</div>'}
+    ${p ? `<div>Prateleira <b>P.${L.p2(p.numero)}</b> · ${esc(L.nomeEmb(L.embPrat(p,EST)))}</div><div class="row2"><button class="btn sec" id="mpVer">Ver esta prateleira</button><button class="btn sec" id="mpTirar">Tirar do mapa</button></div>` : '<div class="sub" style="margin:0">Sem prateleira nesta vaga.</div>'}
     <label class="sub" style="margin:0">${p ? 'Trocar por' : 'Colocar a prateleira'}</label>
-    <div class="row2"><select id="mpSel"><option value="">— escolha —</option>${prats.filter(x=>!p || x.numero!==p.numero).map(x=>`<option value="${x.numero}">P.${L.p2(x.numero)} · ${esc(L.nomeEmb(x.embalagem))}${x.mapa?' (hoje na '+x.mapa+')':''}</option>`).join('')}</select><button class="btn" id="mpSalvar">Salvar</button></div>
+    <div class="row2"><select id="mpSel"><option value="">— escolha —</option>${prats.filter(x=>!p || x.numero!==p.numero).map(x=>`<option value="${x.numero}">P.${L.p2(x.numero)} · ${esc(L.nomeEmb(L.embPrat(x,EST)))}${x.mapa?' (hoje na '+x.mapa+')':''}</option>`).join('')}</select><button class="btn" id="mpSalvar">Salvar</button></div>
     <div id="mpMsg"></div></div>${legenda}`;
   ligarTips();
   if($('#mpVer')) $('#mpVer').onclick = () => { VZ.num = p.numero; VZ.lado = null; VZ.sel = null; renderViz(); renderMapa(); $('#vzCard').scrollIntoView({ behavior:'smooth', block:'start' }); };
@@ -818,11 +838,11 @@ function renderMapa(){
 async function salvarMapa(lista){
   if(MP.salvando) return; MP.salvando = true; const msg = $('#mpMsg'); if(msg) msg.innerHTML = '<div class="sub">Salvando…</div>';
   try{
-    const prats = lista.map(p=>({ id:p.id, numero:p.numero, embalagem:p.embalagem, situacao:p.situacao||'Ativa', obs:p.obs||'', linhas:p.linhas||'', mapa:p.mapa||'' }));
+    const prats = lista.map(p=>({ id:p.id, numero:p.numero, embalagem:p.embalagem, situacao:p.situacao||'Ativa', obs:p.obs||'', linhas:p.linhas||'', mapa:p.mapa||'', andares: Array.isArray(p.andares) ? p.andares.join(',') : (p.andares||'') }));
     await post({ prateleiras:prats, usuario: SESSAO && SESSAO.nome || '' });
     // aplica já na tela; a próxima atualização confirma pela planilha
     prats.forEach(n=>{ const i = (DADOS.prateleiras||[]).findIndex(x=>x.id===n.id); if(i>=0) DADOS.prateleiras[i] = Object.assign({}, DADOS.prateleiras[i], { mapa:n.mapa }); });
-    renderMapa(); if(DADOS && DADOS.versao < 7 && $('#mpMsg')) $('#mpMsg').innerHTML = '<div class="alert warn">O script da planilha precisa estar na versão 7 para guardar o mapa.</div>';
+    renderMapa(); if(DADOS && DADOS.versao < 8 && $('#mpMsg')) $('#mpMsg').innerHTML = '<div class="alert warn">O script da planilha precisa estar na versão 8 para guardar o mapa e a embalagem de cada andar.</div>';
   }catch(e){ if($('#mpMsg')) $('#mpMsg').innerHTML = `<div class="alert bad">${esc(e.message||e)}</div>`; }
   finally{ MP.salvando = false; }
 }

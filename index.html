@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.27o"></script>
+<script src="regras.js?v=2026.10.27p"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27o'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27p'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -177,6 +177,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
 .seqcmp{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;text-align:center}
 .seqbox{border:1.5px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column}.seqbox b{font-family:var(--f-code);font-size:19px}.seqbox small{font-size:12px;color:var(--muted)}
 .seqbox.bad{border-color:var(--bad);background:var(--bad-bg)}.seqbox.bad b{color:var(--bad)}.seqbox.warn{border-color:var(--warn);background:var(--warn-bg)}.seqbox.warn b{color:var(--warn)}.seqarr{font-size:22px}
+.pandares .pemb{font-style:normal;font-weight:700;font-size:11px;flex:0 0 58px;color:var(--ink)}
 </style>
 </head>
 <body>
@@ -265,7 +266,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
       </div>
       <div class="card">
         <h3>Regras de armazenamento</h3>
-        <div class="small">Cada <b>andar</b> da prateleira só recebe amostras com o <b>mesmo perfil</b>; andares diferentes da mesma prateleira podem ter perfis diferentes. A embalagem vale para a prateleira inteira.</div>
+        <div class="small">Cada <b>andar</b> da prateleira só recebe amostras com o <b>mesmo perfil</b>; andares diferentes da mesma prateleira podem ter perfis diferentes. A <b>embalagem</b> também é por andar (caixinha 1 kg, 0,5 kg, saco kraft ou livre): o mesmo andar nunca mistura caixinha com saco kraft; a caixinha de 0,5 kg pode ir em andar de 1 kg.</div>
         <table class="rg" id="tabRegras"></table>
       </div>
       <div class="card">
@@ -273,7 +274,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27o</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27p</div>
     </section>
   </main>
 
@@ -887,7 +888,7 @@ function desenharAcoes(c){
 /* Retorno à posição de origem: mesma pilha e mesma altura. As caixinhas que hoje estão nessa altura ou acima
    (desceram quando ela saiu) sobem uma posição. Só quando a pilha tem espaço e o perfil do andar aceita a amostra. */
 function posicaoOrigem(a, emb, ant, pr){
-  const E = L.dimPrat(pr), mesmaMetade = x => x.slot && x.status==='ARQUIVO' && x.protocolo!==a.protocolo && x.slot.prateleira===ant.prateleira && x.slot.andar===ant.andar && x.slot.linha===ant.linha && String(x.slot.lado).charAt(0)===String(ant.lado).charAt(0);
+  const E = L.dimAndar(pr, ant.andar, EST, emb), mesmaMetade = x => x.slot && x.status==='ARQUIVO' && x.protocolo!==a.protocolo && x.slot.prateleira===ant.prateleira && x.slot.andar===ant.andar && x.slot.linha===ant.linha && String(x.slot.lado).charAt(0)===String(ant.lado).charAt(0);
   const metade = Object.values(EST).filter(mesmaMetade);
   if(metade.some(x=>x.slot.lado!==ant.lado)) return null;   // metade com 1 kg e 0,5 kg misturadas: usa o topo (regra geral)
   const pilha = metade.sort((x,y)=>x.slot.altura-y.slot.altura);
@@ -899,18 +900,20 @@ function posicaoOrigem(a, emb, ant, pr){
   return { slot, sobem };
 }
 function escolherPosicao(c, acao){
-  // a caixinha de 0,5 kg pode ir também nas prateleiras de 1 kg (com o endereçamento delas)
-  const prats = prateleiras().filter(p=>L.cabeNa(c.emb, p.embalagem) && p.situacao!=='Inativa').sort((a,b)=>(a.embalagem===c.emb?0:1)-(b.embalagem===c.emb?0:1)||a.numero-b.numero);
-  if(!prats.length){ toast('Nenhuma prateleira de '+L.nomeEmbAceitas(c.emb)+'.'); return; }
-  const pp = L.perfisPrateleiras(EST, prateleiras()), pratDe = n => prats.find(p=>p.numero===n)||prats[0], embDe = n => pratDe(n).embalagem;
+  // andares que aceitam esta embalagem (o de 1 kg aceita também a caixinha de 0,5 kg; andar livre aceita qualquer uma)
+  const aceita = (p, a) => { const ea = L.embAndar(p, a, EST); return !ea || L.cabeNa(c.emb, ea); };
+  const prats = prateleiras().filter(p=>p.situacao!=='Inativa' && [1,2,3,4].some(a=>aceita(p,a))).sort((a,b)=>a.numero-b.numero);
+  if(!prats.length){ toast('Nenhum andar de '+L.nomeEmbAceitas(c.emb)+'.'); return; }
+  const pp = L.perfisPrateleiras(EST, prateleiras()), pratDe = n => prats.find(p=>p.numero===n)||prats[0];
   const opt = (n, f) => Array.from({length:n}, (_,i)=>`<option value="${i+1}">${f(i+1)}</option>`).join('');
   // remanejar uma amostra que está fora da regra: já abre na posição sugerida (a atual não vale mais)
   if(!c.sug && acao==='REMANEJAR' && c.e && c.e.slot && L.validarPosicao(c.a, c.emb, c.e.slot, EST, prateleiras(), c.a.protocolo).length){ const sg = L.sugerirPosicao(c.a, c.emb, EST, prateleiras(), c.a.protocolo); if(sg.slot) c.sug = sg.slot; }
-  const base0 = c.sug || (c.e && c.e.slot); const base = base0 && prats.some(p=>p.numero===base0.prateleira) ? base0 : { prateleira:prats[0].numero, andar:1, linha:1, lado:L.EMBALAGENS[prats[0].embalagem].lados[0], altura:1 };
+  const base0 = c.sug || (c.e && c.e.slot), p0 = base0 && pratDe(base0.prateleira);
+  const base = base0 && p0 && p0.numero===base0.prateleira && aceita(p0, base0.andar) ? base0 : (()=>{ const pr = prats[0], a = [1,2,3,4].find(x=>aceita(pr,x)); return { prateleira:pr.numero, andar:a, linha:1, lado:L.ladosPara(c.emb, L.embAndar(pr,a,EST)).slice(-1)[0], altura:1 }; })();
   sheet(`<h2>Escolher posição</h2><div class="small">${esc(L.nomeEmb(c.emb))} · amostra <b class="mono">${esc(c.a.protocolo)}</b></div>
-    <label class="f">Prateleira<select id="epP">${prats.map(p=>{ const x = pp[p.numero]; return `<option value="${p.numero}">P.${L.p2(p.numero)}${p.embalagem!==c.emb?' (1 kg)':''} · ${x&&x.perfis&&x.perfis.length>1?x.perfis.length+' perfis (por andar)':x&&x.perfil?esc(L.textoPerfil(x.perfil)):'livre'}</option>`; }).join('')}</select></label>
+    <label class="f">Prateleira<select id="epP">${prats.map(p=>{ const x = pp[p.numero]; return `<option value="${p.numero}">P.${L.p2(p.numero)} · ${esc(L.nomeEmb(L.embPrat(p,EST)))} · ${x&&x.perfis&&x.perfis.length>1?x.perfis.length+' perfis (por andar)':x&&x.perfil?esc(L.textoPerfil(x.perfil)):'livre'}</option>`; }).join('')}</select></label>
     <div class="grid2">
-      <label class="f">Andar<select id="epA">${opt(4, n=>'A.'+L.p2(n))}</select></label>
+      <label class="f">Andar<select id="epA"></select></label>
       <label class="f">Linha<select id="epL"></select></label>
       <label class="f">Lado<select id="epLado"></select></label>
       <label class="f">Altura<select id="epH"></select></label>
@@ -918,17 +921,27 @@ function escolherPosicao(c, acao){
     <div class="small" id="epObs"></div>
     <div id="epMsg"></div>
     <div class="row"><button class="btn ghost" id="epVoltar">Voltar</button><button class="btn" id="epOk">Confirmar posição</button></div>`);
-  // linha/lado/altura seguem o endereçamento da prateleira escolhida
-  const montar = n => { const ep = embDe(n), E = L.dimPrat(pratDe(n)), keep = (id, v) => { const o = $(id).querySelector(`option[value="${v}"]`); if(o) $(id).value = v; };
+  const keep = (id, v) => { const o = $(id).querySelector(`option[value="${v}"]:not([disabled])`); if(o) $(id).value = v; };
+  // andares da prateleira escolhida (os que não aceitam esta embalagem ficam desabilitados)
+  const montarAndares = n => { const pr = pratDe(n), va = $('#epA').value;
+    $('#epA').innerHTML = [1,2,3,4].map(a=>{ const ea = L.embAndar(pr, a, EST); return `<option value="${a}" ${aceita(pr,a)?'':'disabled'}>A.${L.p2(a)} · ${esc(ea ? L.nomeEmb(ea).replace('Caixinha ','Cx ') : 'livre')}</option>`; }).join('');
+    keep('#epA', va); if($('#epA').selectedOptions[0] && $('#epA').selectedOptions[0].disabled){ const a = [1,2,3,4].find(x=>aceita(pr,x)); $('#epA').value = a; } };
+  // linha/lado/altura seguem o endereçamento do ANDAR escolhido
+  const montar = () => { const pr = pratDe(+$('#epP').value), a = +$('#epA').value, ea = L.embAndar(pr, a, EST), k = ea || c.emb, E = L.dimAndar(pr, a, EST, c.emb);
     const vL = $('#epL').value, vLa = $('#epLado').value, vH = $('#epH').value;
-    $('#epL').innerHTML = opt(E.linhas, n=>'L.'+L.p2(n)); $('#epLado').innerHTML = L.ladosPara(c.emb, pratDe(n)).slice().reverse().map(l=>`<option value="${l}">${L.nomeLado(l)}</option>`).join(''); $('#epH').innerHTML = opt(E.alturas, n=>L.nomeAltura(ep, n));
+    $('#epL').innerHTML = opt(E.linhas, n=>'L.'+L.p2(n)); $('#epLado').innerHTML = L.ladosPara(c.emb, k).slice().reverse().map(l=>`<option value="${l}">${L.nomeLado(l)}</option>`).join(''); $('#epH').innerHTML = opt(E.alturas, n=>L.nomeAltura(k, n));
     keep('#epL', vL); keep('#epLado', vLa); keep('#epH', vH);
-    $('#epObs').textContent = ep!==c.emb ? 'Caixinha de 0,5 kg numa prateleira de 1 kg: cabem 2 na profundidade de cada metade (Frente 01 · Frente 02 · Trás 01 · Trás 02). Uma de 1 kg ocupa os 2 espaços da metade e pode ir em cima de duas de 0,5 kg.' : ''; };
-  $('#epP').value = base.prateleira; montar(base.prateleira); $('#epA').value = base.andar; $('#epL').value = base.linha; $('#epLado').value = base.lado; $('#epH').value = base.altura;
-  $('#epP').addEventListener('change', ()=>montar(+$('#epP').value));
+    $('#epObs').textContent = (k==='CX1' && c.emb==='CX05') ? 'Caixinha de 0,5 kg em andar de 1 kg: cabem 2 na profundidade de cada metade (Frente 01 · Frente 02 · Trás 01 · Trás 02). Uma de 1 kg ocupa os 2 espaços da metade e pode ir em cima de duas de 0,5 kg.'
+      : !ea ? 'Andar livre: passa a ser de ' + L.nomeEmb(c.emb) + ' com esta amostra.' : ''; };
+  $('#epP').value = base.prateleira; montarAndares(base.prateleira); $('#epA').value = base.andar; montar(); $('#epL').value = base.linha; $('#epLado').value = base.lado; $('#epH').value = base.altura;
   const slot = () => ({ prateleira:+$('#epP').value, andar:+$('#epA').value, linha:+$('#epL').value, lado:$('#epLado').value, altura:+$('#epH').value });
   const checar = () => { const m = L.validarPosicao(c.a, c.emb, slot(), EST, prateleiras(), c.a.protocolo); $('#epMsg').innerHTML = m.length ? `<div class="alert bad">${m.map(esc).join('<br>')}</div>` : '<div class="alert ok">Posição livre e compatível com as regras.</div>'; $('#epOk').disabled = !!m.length; };
-  ['#epP','#epA','#epL','#epLado','#epH'].forEach(id=>$(id).onchange = checar); checar();
+  // ao trocar de prateleira ou de andar: já vai para a 1ª posição livre e válida daquele andar
+  const irPrimeira = () => { const pr = pratDe(+$('#epP').value), a = +$('#epA').value;
+    for(const s of L.ordemSlots(pr.numero, c.emb, pr.linhas, a)) if(!L.validarPosicao(c.a, c.emb, s, EST, prateleiras(), c.a.protocolo).length){ $('#epL').value = s.linha; $('#epLado').value = s.lado; $('#epH').value = s.altura; return; } };
+  $('#epP').onchange = () => { montarAndares(+$('#epP').value); montar(); irPrimeira(); checar(); };
+  $('#epA').onchange = () => { montar(); irPrimeira(); checar(); };
+  ['#epL','#epLado','#epH'].forEach(id=>$(id).onchange = checar); checar();
   $('#epVoltar').onclick = () => telaAmostra(c);
   $('#epOk').onclick = () => registrar(c, acao, { slot:slot() });
 }
@@ -1037,32 +1050,41 @@ function renderUltimo(){
 }
 
 /* perfil de cada andar (A.04 em cima, como na prateleira física) */
-function andaresHTML(x){
+function andaresHTML(x, pr){
+  // por andar: embalagem (curta) + perfil; A.04 em cima, como na prateleira física
+  const curta = k => k==='CX1' ? 'Cx 1 kg' : k==='CX05' ? 'Cx 0,5 kg' : k==='KRAFT' ? 'Kraft' : 'Livre';
+  const misto = pr && L.resumoEmb([1,2,3,4].map(a=>L.embAndar(pr, a, EST)))==='MISTO';
   return `<div class="pandares">${[4,3,2,1].map(a=>{ const an = x && x.andares && x.andares[a], p = an && an.perfil, G = p ? (L.GRUPOS[p.grupo]||L.GRUPOS.OUTROS) : null;
-    return `<div><b>A.${L.p2(a)}</b>${G?`<span class="swatch" style="background:${G.cor}"></span>`:''}<span>${esc(p ? L.textoPerfil(p) : 'livre')}</span></div>`; }).join('')}</div>`;
+    return `<div><b>A.${L.p2(a)}</b>${misto?`<em class="pemb">${esc(curta(L.embAndar(pr, a, EST)))}</em>`:''}${G?`<span class="swatch" style="background:${G.cor}"></span>`:''}<span>${esc(p ? L.textoPerfil(p) : 'livre')}</span></div>`; }).join('')}</div>`;
 }
 
 /* ================== PRATELEIRAS ================== */
 function novaPrateleira(embIni, depois){
   const nums = prateleiras().map(p=>p.numero), prox = nums.length ? Math.max(...nums)+1 : 1;
-  sheet(`<h2>Nova prateleira</h2><div class="small">Todas as prateleiras têm 4 andares. A capacidade depende da embalagem. Cada ANDAR assume o perfil da primeira amostra armazenada nele (cultura, tratamento, produtor e grupo de remessa).</div>
+  const OPC = [['CX1','1 kg'],['CX05','0,5 kg'],['KRAFT','Kraft'],['','Livre']];
+  const andares = [1,2,3,4].map(()=>embIni || 'CX1'); let lin = 15;
+  sheet(`<h2>Nova prateleira</h2><div class="small">Cada <b>andar</b> tem a sua embalagem; andares diferentes podem ter embalagens diferentes, e o mesmo andar nunca mistura caixinha com saco kraft. Cada andar também assume o perfil da 1ª amostra armazenada nele.</div>
     <label class="f">Número<input type="number" id="npNum" min="1" value="${prox}"></label>
-    <div><h3 style="margin-bottom:6px">Embalagem</h3><div class="seg" id="npEmb">${Object.entries(L.EMBALAGENS).map(([k,v])=>`<button data-emb="${k}" aria-pressed="${k===(embIni||'CX1')}">${v.nome}</button>`).join('')}</div></div>
-    <div id="npLinBox"><h3 style="margin-bottom:6px">Linhas por andar</h3><div class="seg" id="npLin"><button data-lin="14" aria-pressed="false">14 linhas</button><button data-lin="15" aria-pressed="true">15 linhas</button></div></div>
+    <div class="row" style="align-items:center;justify-content:space-between"><h3 style="margin:0">Embalagem por andar</h3><select id="npTodos" style="flex:0 0 auto;width:auto"><option value="">Mesma para todos…</option>${OPC.map(([k,t])=>`<option value="${k||'LIVRE'}">${t}</option>`).join('')}</select></div>
+    <div id="npAnd">${[4,3,2,1].map(a=>`<div class="row" style="align-items:center;margin-bottom:6px"><b style="flex:0 0 44px">A.${L.p2(a)}</b><div class="seg" data-and="${a}" style="flex:1 1 auto">${OPC.map(([k,t])=>`<button data-emb="${k}" aria-pressed="false">${t}</button>`).join('')}</div></div>`).join('')}</div>
+    <div class="small"><b>Livre</b> = o andar assume a embalagem da 1ª amostra armazenada nele.</div>
+    <div id="npLinBox" class="row" style="align-items:center"><span class="small" style="flex:1 1 auto">Linhas nos andares de caixinha</span><div class="seg" id="npLin" style="flex:0 0 auto"><button data-lin="14" aria-pressed="false">14</button><button data-lin="15" aria-pressed="true">15</button></div></div>
     <div class="small" id="npCap"></div>
     <div class="row"><button class="btn ghost" id="npCancel">Cancelar</button><button class="btn" id="npOk">Cadastrar</button></div>`);
-  let emb = embIni || 'CX1', lin = 15;
-  const cap = () => { const op = L.LINHAS_OPCOES[emb]; $('#npLinBox').hidden = !op; const nl = op ? lin : L.EMBALAGENS[emb].linhas; const E = L.EMBALAGENS[emb];
-    $('#npCap').textContent = `${E.nome}: ${E.alturas} na altura × ${E.lados.length} na largura/profundidade × ${nl} linhas × 4 andares = ${L.capPrateleira(emb, nl)} amostras.`; };
-  $('#npLin').onclick = ev => { const b = ev.target.closest('[data-lin]'); if(!b) return; lin = +b.dataset.lin; $('#npLin').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); cap(); };
-  cap();
-  $('#npEmb').onclick = ev => { const b = ev.target.closest('[data-emb]'); if(!b) return; emb = b.dataset.emb; $('#npEmb').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); cap(); };
+  const pintar = () => { document.querySelectorAll('#npAnd [data-and]').forEach(sg=>{ const a = +sg.dataset.and; sg.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.emb===andares[a-1])); });
+    const temCx = andares.some(k=>!k || L.LINHAS_OPCOES[k]); $('#npLinBox').hidden = !temCx;
+    const fake = { andares:andares.join(','), linhas:lin }, linhasTxt = [4,3,2,1].map(a=>{ const k = andares[a-1]; return k ? `A.${L.p2(a)} ${L.nomeEmb(k).replace('Caixinha ','caixinha ').replace('Saco kraft','kraft')}: ${L.nLinhas(k, lin)} linhas × ${L.EMBALAGENS[k].lados.length} × ${L.EMBALAGENS[k].alturas} = ${L.capAndar(k, lin)}` : `A.${L.p2(a)} livre: capacidade definida pela 1ª amostra`; });
+    $('#npCap').innerHTML = `<b>Capacidade</b><br>${linhasTxt.map(esc).join('<br>')}<br><b>Total: ${L.capPrat(fake).toLocaleString('pt-BR')} posições${andares.some(k=>!k)?' (+ andares livres)':''}</b>`; };
+  $('#npAnd').onclick = ev => { const b = ev.target.closest('[data-emb]'); if(!b) return; andares[+b.closest('[data-and]').dataset.and - 1] = b.dataset.emb; pintar(); };
+  $('#npTodos').onchange = () => { const v = $('#npTodos').value; if(!v) return; for(let i=0;i<4;i++) andares[i] = v==='LIVRE' ? '' : v; $('#npTodos').value = ''; pintar(); };
+  $('#npLin').onclick = ev => { const b = ev.target.closest('[data-lin]'); if(!b) return; lin = +b.dataset.lin; $('#npLin').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); pintar(); };
+  pintar();
   $('#npCancel').onclick = () => depois ? depois() : fecharSheet();
   $('#npOk').onclick = () => {
     const n = parseInt($('#npNum').value, 10);
     if(!(n>0)){ toast('Número inválido.'); return; }
     if(prateleiras().some(p=>p.numero===n)){ toast('Já existe a prateleira '+L.p2(n)+'.'); return; }
-    const p = { id:uid(), numero:n, embalagem:emb, linhas: L.LINHAS_OPCOES[emb] ? lin : L.EMBALAGENS[emb].linhas, situacao:'Ativa', obs:'', ts:Date.now() };
+    const p = { id:uid(), numero:n, embalagem:L.resumoEmb(andares), andares:andares.join(','), linhas: andares.some(k=>!k || L.LINHAS_OPCOES[k]) ? lin : '', situacao:'Ativa', obs:'', ts:Date.now() };
     db.prateleiras.push(p); db.filaPrat.push(p); save(); sincronizar();
     toast('Prateleira '+L.p2(n)+' cadastrada'); if(depois) depois(); else { fecharSheet(); render(); }
   };
@@ -1071,7 +1093,7 @@ $('#btnNovaPrat').onclick = () => novaPrateleira();
 function renderArquivo(){
   const est = Object.values(EST), prats = prateleiras(), pp = L.perfisPrateleiras(EST, prats);
   const noArq = est.filter(e=>e.status==='ARQUIVO').length, emSala = est.filter(e=>e.status==='SALA').length;
-  const cap = prats.filter(p=>p.situacao!=='Inativa').reduce((s,p)=>s+L.capPrateleira(p.embalagem, p.linhas),0);
+  const cap = prats.filter(p=>p.situacao!=='Inativa').reduce((s,p)=>s+L.capPrat(p, EST),0);
   { const fr = L.foraDaRegra(EST, prats);
     $('#foraArq').innerHTML = fr.length ? `<div class="alert warn"><b>${fr.length} ${fr.length===1?'amostra está':'amostras estão'} fora da regra</b> (emblocadas antes de uma regra nova ou sem apoio). Toque para remanejar:<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${fr.map(x=>`<button class="btn ghost sm" data-fr="${esc(x.e.protocolo)}" title="${esc(x.motivos.join('; '))}">${esc(x.e.protocolo)} · ${esc(L.textoSlot(x.e.slot, x.e.embalagem))}</button>`).join('')}</div></div>` : '';
     $('#foraArq').onclick = ev => { const b = ev.target.closest('[data-fr]'); if(b) abrirAmostra(b.dataset.fr); }; }
@@ -1080,47 +1102,50 @@ function renderArquivo(){
     <div class="stat"><div class="n">${cap?Math.round((noArq+emSala)/cap*100):0}%</div><div class="t">Ocupação · ${prats.length} prat.</div></div>`;
   $('#statsArq').onclick = e => { const b = e.target.closest('[data-ir]'); if(b){ filtroAm = b.dataset.ir; show('amostras'); } };
   $('#listPrat').innerHTML = prats.length ? prats.map(p=>{
-    const x = pp[p.numero] || {}, capP = L.capPrateleira(p.embalagem, p.linhas), us = x.usadas||0, G = x.perfil ? (L.GRUPOS[x.perfil.grupo]||L.GRUPOS.OUTROS) : null;
-    return `<button class="card prat" data-prat="${p.numero}"><div class="hd"><span class="num">P.${L.p2(p.numero)}</span><span class="pill mut">${esc(L.nomeEmb(p.embalagem))}</span>${p.situacao==='Inativa'?'<span class="pill bad">Inativa</span>':''}<span style="margin-left:auto" class="mono">${us}/${capP}</span></div>
-      ${andaresHTML(x)}
+    const x = pp[p.numero] || {}, capP = L.capPrat(p, EST), us = x.usadas||0, G = x.perfil ? (L.GRUPOS[x.perfil.grupo]||L.GRUPOS.OUTROS) : null;
+    return `<button class="card prat" data-prat="${p.numero}"><div class="hd"><span class="num">P.${L.p2(p.numero)}</span><span class="pill mut">${esc(L.nomeEmb(L.embPrat(p,EST)))}</span>${p.situacao==='Inativa'?'<span class="pill bad">Inativa</span>':''}<span style="margin-left:auto" class="mono">${us}/${capP}</span></div>
+      ${andaresHTML(x, p)}
       <div class="bar"><i style="width:${Math.min(100,us/capP*100)}%"></i></div></button>`; }).join('')
     : '<div class="empty">Nenhuma prateleira cadastrada. Toque em <b>+ Prateleira</b> para começar.</div>';
   $('#listPrat').onclick = e => { const b = e.target.closest('[data-prat]'); if(b) verPrateleira(+b.dataset.prat, 1); };
 }
+function salvarPrat(p, mud, msg){
+  const n = Object.assign({}, p, mud, { ts:Date.now() }); n.embalagem = L.resumoEmb(L.andaresDe(n));
+  const i = db.prateleiras.findIndex(x=>x.id===p.id); if(i>=0) db.prateleiras[i] = n; else db.prateleiras.push(n); db.filaPrat.push(n); save(); sincronizar(); if(msg) toast(msg); return n;
+}
 function verPrateleira(num, andar){
   const p = prateleiras().find(x=>x.numero===num); if(!p) return;
-  const E = L.dimPrat(p), capL = L.capLinha(p.embalagem);
+  const ea = L.embAndar(p, andar, EST), E = L.dimAndar(p, andar, EST), capL = ea ? L.capLinha(ea) : 0, fixas = L.andaresDe(p);
   const am = Object.values(EST).filter(e=>e.slot && (e.status==='ARQUIVO'||e.status==='SALA') && e.slot.prateleira===num);
+  const doAndar = am.filter(e=>e.slot.andar===andar);
   const x = L.perfisPrateleiras(EST, prateleiras())[num] || {};
   let cells = '';
-  for(let l=1; l<=E.linhas; l++){ const n = am.filter(e=>e.slot.andar===andar && e.slot.linha===l).length; cells += `<button class="lcell ${n>=capL?'cheia':n?'parcial':''}" data-l="${l}"><b>L.${L.p2(l)}</b>${n}/${capL}</button>`; }
-  sheet(`<div class="row" style="align-items:center"><h2 style="flex:2 1 auto">Prateleira ${L.p2(num)}</h2><span class="pill mut">${esc(L.nomeEmb(p.embalagem))}</span></div>
-    <div class="small">Andar ${L.p2(andar)}: <b>${esc(x.andares && x.andares[andar] && x.andares[andar].perfil ? L.textoPerfil(x.andares[andar].perfil) : 'livre (assume o perfil da 1ª amostra)')}</b></div>
+  if(E) for(let l=1; l<=E.linhas; l++){ const n = doAndar.filter(e=>e.slot.linha===l).length; cells += `<button class="lcell ${n>=capL?'cheia':n?'parcial':''}" data-l="${l}"><b>L.${L.p2(l)}</b>${n}/${capL}</button>`; }
+  const OPC = [['CX1','1 kg'],['CX05','0,5 kg'],['KRAFT','Kraft'],['','Livre']];
+  const linhasOp = L.temCaixinha(p) ? [14,15] : null, linAtual = Number(p.linhas) > 0 ? Number(p.linhas) : 15;
+  sheet(`<div class="row" style="align-items:center"><h2 style="flex:2 1 auto">Prateleira ${L.p2(num)}</h2><span class="pill mut">${esc(L.nomeEmb(L.embPrat(p,EST)))}</span></div>
+    <div class="small">Andar ${L.p2(andar)} · <b>${esc(ea ? L.nomeEmb(ea) : 'Livre')}</b>${!fixas[andar-1] && ea ? ' (assumida da 1ª amostra)' : ''}: <b>${esc(x.andares && x.andares[andar] && x.andares[andar].perfil ? L.textoPerfil(x.andares[andar].perfil) : 'livre (assume o perfil da 1ª amostra)')}</b></div>
     <div class="seg" id="vpA">${[1,2,3,4].map(a=>`<button data-a="${a}" aria-pressed="${a===andar}">Andar ${L.p2(a)}</button>`).join('')}</div>
-    <div class="lgrid" id="vpL">${cells}</div>
+    ${E ? `<div class="lgrid" id="vpL">${cells}</div>` : `<div class="alert ok">Andar <b>livre e vazio</b>: assume a embalagem da 1ª amostra armazenada nele (caixinha 1 kg, 0,5 kg ou saco kraft). Se quiser, fixe a embalagem abaixo.</div>`}
     <div id="vpLinha"></div>
-    ${!am.length?`<div><div class="small" style="margin-bottom:4px">Embalagem (só pode mudar com a prateleira vazia)</div><div class="seg" id="vpEmb">${Object.entries(L.EMBALAGENS).map(([k,v])=>`<button data-emb="${k}" aria-pressed="${k===p.embalagem}">${esc(v.nome)}</button>`).join('')}</div></div>`:''}
-    ${L.LINHAS_OPCOES[p.embalagem]?`<div class="row" style="align-items:center"><span class="small" style="flex:1 1 auto">Linhas por andar</span><div class="seg" id="vpLin" style="flex:0 0 auto">${L.LINHAS_OPCOES[p.embalagem].map(n=>`<button data-lin="${n}" aria-pressed="${n===E.linhas}">${n}</button>`).join('')}</div></div>`:''}
+    ${!doAndar.length ? `<div><div class="small" style="margin-bottom:4px">Embalagem do andar ${L.p2(andar)} (só pode mudar com o andar vazio)</div><div class="seg" id="vpEmb">${OPC.map(([k,t])=>`<button data-emb="${k}" aria-pressed="${k===fixas[andar-1]}">${t}</button>`).join('')}</div></div>` : ''}
+    ${linhasOp?`<div class="row" style="align-items:center"><span class="small" style="flex:1 1 auto">Linhas nos andares de caixinha</span><div class="seg" id="vpLin" style="flex:0 0 auto">${linhasOp.map(n=>`<button data-lin="${n}" aria-pressed="${n===linAtual}">${n}</button>`).join('')}</div></div>`:''}
     <div class="row"><button class="btn ghost" id="vpFechar">Fechar</button><button class="btn ghost" id="vpSit">${p.situacao==='Inativa'?'Reativar':'Desativar'} prateleira</button></div>`);
   $('#vpA').onclick = e => { const b = e.target.closest('[data-a]'); if(b) verPrateleira(num, +b.dataset.a); };
-  $('#vpL').onclick = e => { const b = e.target.closest('[data-l]'); if(!b) return; linhaSel(num, andar, +b.dataset.l); };
-  if(false) $('#vpL').onclick = e => { const b = e.target.closest('[data-l]'); if(!b) return; const l = +b.dataset.l;
-    const da = am.filter(x=>x.slot.andar===andar && x.slot.linha===l).sort((a,b)=>E.lados.indexOf(a.slot.lado)-E.lados.indexOf(b.slot.lado)||a.slot.altura-b.slot.altura);
-    $('#vpLinha').innerHTML = `<div class="card" style="background:var(--bg)"><h3>Linha ${L.p2(l)} · andar ${L.p2(andar)}</h3>${da.length ? da.map(x=>`<button class="item" data-prot="${esc(x.protocolo)}"><span class="prot">${esc(x.protocolo)}</span><span class="side">${esc(L.nomeLado(x.slot.lado))} · ${esc(L.nomeAltura(p.embalagem, x.slot.altura))}${x.embalagem && x.embalagem!==p.embalagem?' · '+esc(L.nomeEmb(x.embalagem)):''}</span><span class="meta">${esc(x.cultivar||'')} · ${esc(x.remessa||x.classificacao||'')}${x.status==='SALA'?' · em '+esc(x.local):''}</span></button>`).join('') : '<div class="small">Linha vazia.</div>'}
-      ${da.length?`<button class="btn sec sm" data-etq="${num}|${andar}|${l}">Imprimir etiqueta desta linha</button>`:''}</div>`; };
-  if(false) $('#vpLinha').onclick = e => { const b = e.target.closest('[data-prot]'); if(b){ abrirAmostra(b.dataset.prot); return; } const t = e.target.closest('[data-etq]'); if(t){ const [pp,aa,ll] = t.dataset.etq.split('|').map(Number); imprimirEtiquetas([[pp,aa,ll]]); } };
+  if($('#vpL')) $('#vpL').onclick = e => { const b = e.target.closest('[data-l]'); if(!b) return; linhaSel(num, andar, +b.dataset.l); };
   $('#vpFechar').onclick = fecharSheet;
-  if($('#vpEmb')) $('#vpEmb').onclick = ev => { const b = ev.target.closest('[data-emb]'); if(!b) return; const emb = b.dataset.emb; if(emb===p.embalagem) return;
-    if(Object.values(EST).some(x=>x.slot && x.slot.prateleira===num && (x.status==='ARQUIVO'||x.status==='SALA'))){ toast('A prateleira não está vazia: remaneje as amostras antes de mudar a embalagem.'); return; }
-    if(!confirm('Mudar a prateleira '+L.p2(num)+' de '+L.nomeEmb(p.embalagem)+' para '+L.nomeEmb(emb)+'?')) return;
-    const n = Object.assign({}, p, { embalagem:emb, linhas: L.LINHAS_OPCOES[emb] ? (L.LINHAS_OPCOES[p.embalagem] && p.linhas ? p.linhas : 15) : L.EMBALAGENS[emb].linhas, ts:Date.now() });
-    const i = db.prateleiras.findIndex(x=>x.id===p.id); if(i>=0) db.prateleiras[i] = n; else db.prateleiras.push(n); db.filaPrat.push(n); save(); sincronizar();
-    toast('Prateleira '+L.p2(num)+': agora é de '+L.nomeEmb(emb)+' ('+L.capPrateleira(emb, n.linhas)+' posições)'); verPrateleira(num, andar); render(); };
-  if($('#vpLin')) $('#vpLin').onclick = ev => { const b = ev.target.closest('[data-lin]'); if(!b) return; const nl = +b.dataset.lin; if(nl===E.linhas) return;
-    if(am.some(x=>x.slot.linha>nl)){ toast('Há amostras na linha '+L.p2(E.linhas)+'. Remaneje-as antes de reduzir para '+nl+' linhas.'); return; }
-    const n = Object.assign({}, p, { linhas:nl, ts:Date.now() }); const i = db.prateleiras.findIndex(x=>x.id===p.id); if(i>=0) db.prateleiras[i] = n; else db.prateleiras.push(n); db.filaPrat.push(n); save(); sincronizar(); toast('Prateleira '+L.p2(num)+': '+nl+' linhas por andar'); verPrateleira(num, andar); render(); };
+  if($('#vpEmb')) $('#vpEmb').onclick = ev => { const b = ev.target.closest('[data-emb]'); if(!b) return; const emb = b.dataset.emb; if(emb===fixas[andar-1]) return;
+    if(Object.values(EST).some(x=>x.slot && x.slot.prateleira===num && x.slot.andar===andar && (x.status==='ARQUIVO'||x.status==='SALA'))){ toast('O andar não está vazio: remaneje as amostras antes de mudar a embalagem.'); return; }
+    if(!confirm('Andar '+L.p2(andar)+' da prateleira '+L.p2(num)+': mudar de '+L.nomeEmb(fixas[andar-1])+' para '+L.nomeEmb(emb)+'?')) return;
+    const nv = fixas.slice(); nv[andar-1] = emb; const mud = { andares:nv.join(',') }; if((!emb || L.LINHAS_OPCOES[emb]) && !(Number(p.linhas) > 0)) mud.linhas = 15;
+    const n = salvarPrat(p, mud); toast('Andar '+L.p2(andar)+': '+L.nomeEmb(emb)+(emb?' ('+L.capAndar(emb, n.linhas)+' posições)':''));
+    verPrateleira(num, andar); render(); };
+  if($('#vpLin')) $('#vpLin').onclick = ev => { const b = ev.target.closest('[data-lin]'); if(!b) return; const nl = +b.dataset.lin; if(nl===linAtual) return;
+    const cx = am.filter(e=>{ const k = L.embAndar(p, e.slot.andar, EST); return L.LINHAS_OPCOES[k] && e.slot.linha>nl; });
+    if(cx.length){ toast('Há amostras na linha '+L.p2(linAtual)+' de andar de caixinha. Remaneje-as antes de reduzir para '+nl+' linhas.'); return; }
+    salvarPrat(p, { linhas:nl }, 'Prateleira '+L.p2(num)+': '+nl+' linhas nos andares de caixinha'); verPrateleira(num, andar); render(); };
   $('#vpSit').onclick = () => { if(am.length && p.situacao!=='Inativa' && !confirm('A prateleira tem '+am.length+' amostra(s). Desativar mesmo assim? Ela não recebe novas amostras.')) return;
-    const n = Object.assign({}, p, { situacao: p.situacao==='Inativa'?'Ativa':'Inativa', ts:Date.now() }); const i = db.prateleiras.findIndex(x=>x.id===p.id); if(i>=0) db.prateleiras[i] = n; else db.prateleiras.push(n); db.filaPrat.push(n); save(); sincronizar(); fecharSheet(); render(); };
+    salvarPrat(p, { situacao: p.situacao==='Inativa'?'Ativa':'Inativa' }); fecharSheet(); render(); };
 }
 
 /* ================== LINHA DA PRATELEIRA: SELECIONAR VÁRIAS ==================
@@ -1133,7 +1158,7 @@ function ctxDe(e){
 }
 function linhaSel(num, andar, l){
   const chave = num+'|'+andar+'|'+l; if(SEL.chave!==chave){ SEL.chave = chave; SEL.arq = new Set(); SEL.sala = new Set(); }
-  const p = prateleiras().find(x=>x.numero===num), E = L.dimPrat(p), ordemLado = L.EMBALAGENS.CX05.lados.concat(['T','F']);
+  const p = prateleiras().find(x=>x.numero===num), ordemLado = L.EMBALAGENS.CX05.lados.concat(['T','F']);
   const daLinha = Object.values(EST).filter(x=>x.status==='ARQUIVO' && x.slot && x.slot.prateleira===num && x.slot.andar===andar && x.slot.linha===l)
     .sort((a,b)=>String(a.slot.lado).charAt(0).localeCompare(String(b.slot.lado).charAt(0)) * -1 || a.slot.altura-b.slot.altura || ordemLado.indexOf(a.slot.lado)-ordemLado.indexOf(b.slot.lado));
   const emSala = Object.values(EST).filter(x=>x.status==='SALA' && x.slotAnterior && x.slotAnterior.prateleira===num && x.slotAnterior.andar===andar && x.slotAnterior.linha===l).sort((a,b)=>a.slotAnterior.altura-b.slotAnterior.altura);
@@ -1145,9 +1170,9 @@ function linhaSel(num, andar, l){
       <span class="meta">${esc(x.cultivar||'')} · ${esc(x.remessa||x.classificacao||'')}${fora.has(x.protocolo)?' · <b style="color:var(--bad)">fora da regra</b>':''}${grupo==='sala'?' · em '+esc(x.local)+' há '+dur(Date.now()-x.desde):''}</span></button></div>`; };
   const todos = (grupo, lista) => lista.length ? `<div class="row" style="justify-content:space-between;align-items:center"><button class="btn ghost sm" data-todos="${grupo}" style="flex:0 0 auto">${SEL[grupo].size===lista.length?'Desmarcar todas':'Selecionar todas ('+lista.length+')'}</button><span class="small">${SEL[grupo].size} selecionada(s)</span></div>` : '';
   let h = `<div class="card" style="background:var(--bg)"><h3>Linha ${L.p2(l)} · andar ${L.p2(andar)}</h3>
-    ${daLinha.length ? todos('arq', daLinha) + daLinha.map(x=>item(x,'arq', esc(L.nomeLado(x.slot.lado))+' · '+esc(L.nomeAltura(p.embalagem, x.slot.altura)))).join('') : '<div class="small">Nenhuma amostra nesta linha.</div>'}
+    ${daLinha.length ? todos('arq', daLinha) + daLinha.map(x=>item(x,'arq', esc(L.nomeLado(x.slot.lado))+' · '+esc(L.nomeAltura(x.embalagem, x.slot.altura)))).join('') : '<div class="small">Nenhuma amostra nesta linha.</div>'}
     ${daLinha.length?`<button class="btn sec sm" data-etq="${num}|${andar}|${l}">Imprimir etiqueta desta linha</button>`:''}</div>`;
-  if(emSala.length) h += `<div class="card" style="background:var(--bg)"><h3>Em sala — saíram desta linha (${emSala.length})</h3>${todos('sala', emSala)}${emSala.map(x=>item(x,'sala','saiu de<br>'+esc(L.nomeLado(x.slotAnterior.lado))+' · '+esc(L.nomeAltura(p.embalagem, x.slotAnterior.altura)))).join('')}</div>`;
+  if(emSala.length) h += `<div class="card" style="background:var(--bg)"><h3>Em sala — saíram desta linha (${emSala.length})</h3>${todos('sala', emSala)}${emSala.map(x=>item(x,'sala','saiu de<br>'+esc(L.nomeLado(x.slotAnterior.lado))+' · '+esc(L.nomeAltura(x.embalagem, x.slotAnterior.altura)))).join('')}</div>`;
   if(SEL.arq.size) h += `<div class="selbar"><b>${SEL.arq.size} selecionada(s) — enviar para:</b><div class="grid2">${L.SALAS.map((sx,i)=>`<button class="btn sec sm" data-lsala="${i}">${esc(sx.replace(/^Sala de /,''))}</button>`).join('')}</div>
     <div class="row"><button class="btn sec sm" data-lacao="REMANEJAR">Remanejar…</button><button class="btn sec sm" data-lacao="BAIXA">Dar baixa</button></div></div>`;
   if(SEL.sala.size) h += `<div class="selbar"><b>${SEL.sala.size} selecionada(s) em sala</b><button class="btn" data-lacao="RETORNO">Retornar às posições de origem</button></div>`;
@@ -1193,21 +1218,22 @@ function loteBaixa(num, andar, l){
 function loteRemanejar(num, andar, l){
   // mantém a ordem da pilha (de baixo para cima) para a sequência dos protocolos continuar igual no destino
   const prots = deCimaParaBaixo([...SEL.arq]).reverse(), emb = (EST[prots[0]]||{}).embalagem || 'CX1';
-  const prats = prateleiras().filter(p=>p.situacao!=='Inativa' && L.cabeNa(emb, p.embalagem)), pp = L.perfisPrateleiras(EST, prateleiras());
+  const aceita = (p, a) => { const ea = L.embAndar(p, a, EST); return !ea || L.cabeNa(emb, ea); };
+  const prats = prateleiras().filter(p=>p.situacao!=='Inativa' && [1,2,3,4].some(a=>aceita(p,a))), pp = L.perfisPrateleiras(EST, prateleiras());
   sheet(`<h2>Remanejar ${prots.length} amostra(s)</h2><div class="small">${esc(prots.join(', '))}</div>
-    <label class="f">Prateleira de destino<select id="lrP">${prats.map(p=>`<option value="${p.numero}">P.${L.p2(p.numero)} · ${esc(L.nomeEmb(p.embalagem))}</option>`).join('')}</select></label>
-    <label class="f">Andar<select id="lrA">${[1,2,3,4].map(a=>`<option value="${a}">A.${L.p2(a)}</option>`).join('')}</select></label>
+    <label class="f">Prateleira de destino<select id="lrP">${prats.map(p=>`<option value="${p.numero}">P.${L.p2(p.numero)} · ${esc(L.nomeEmb(L.embPrat(p,EST)))}</option>`).join('')}</select></label>
+    <label class="f">Andar<select id="lrA"></select></label>
     <div id="lrPlano"></div>
     <div class="row"><button class="btn ghost" id="lrVoltar">Voltar</button><button class="btn" id="lrOk">Confirmar</button></div>`);
   const plano = () => { // simula em sequência num estado de rascunho
     const pn = +$('#lrP').value, an = +$('#lrA').value, pr = prats.find(p=>p.numero===pn), est = Object.assign({}, EST), out = [];
-    const embS = e => (pr.embalagem==='CX1' && e.embalagem==='CX05') ? 'CX05' : pr.embalagem;
-    for(const k of prots){ const e = est[k]; let achou = null;
-      for(const s of L.ordemSlots(pn, embS(e), pr.linhas)){ if(s.andar!==an) continue; if(!L.validarPosicao(ctxDe(e).a, e.embalagem||'CX1', s, est, prateleiras(), k).length){ achou = s; break; } }
+    for(const k of prots){ const e = est[k]; let achou = null; const ea = L.embAndar(pr, an, est) || e.embalagem, embS = (ea==='CX1' && e.embalagem==='CX05') ? 'CX05' : ea;
+      for(const s of L.ordemSlots(pn, embS, pr.linhas, an)){ if(!L.validarPosicao(ctxDe(e).a, e.embalagem||'CX1', s, est, prateleiras(), k).length){ achou = s; break; } }
       out.push({ k, slot:achou }); if(achou){ est[k] = Object.assign({}, e, { slot:achou }); } }
     $('#lrPlano').innerHTML = `<div class="alert ${out.every(x=>x.slot)?'ok':'warn'}">${out.map(x=>`<span class="mono">${esc(x.k)}</span> → ${x.slot?esc(L.textoSlot(x.slot, (EST[x.k]||{}).embalagem)):'<b>sem posição válida neste andar</b>'}`).join('<br>')}</div>`;
     $('#lrOk').disabled = !out.some(x=>x.slot); return out; };
-  $('#lrP').onchange = plano; $('#lrA').onchange = plano; plano();
+  const andaresDe = () => { const pr = prats.find(p=>p.numero===+$('#lrP').value); $('#lrA').innerHTML = [1,2,3,4].map(a=>{ const ea = L.embAndar(pr, a, EST); return `<option value="${a}" ${aceita(pr,a)?'':'disabled'}>A.${L.p2(a)} · ${esc(ea ? L.nomeEmb(ea) : 'livre')}</option>`; }).join(''); $('#lrA').value = [1,2,3,4].find(a=>aceita(pr,a)); };
+  $('#lrP').onchange = () => { andaresDe(); plano(); }; $('#lrA').onchange = plano; andaresDe(); plano();
   $('#lrVoltar').onclick = () => { fecharSheet(); verPrateleira(num, andar); linhaSel(num, andar, l); };
   $('#lrOk').onclick = () => { const out = plano().filter(x=>x.slot); const mapa = new Map(out.map(x=>[x.k, x.slot]));
     loteExecutar('Remanejadas', out.map(x=>x.k), e => registrar(ctxDe(e), 'REMANEJAR', { slot:mapa.get(e.protocolo) }, true), [num, andar, l]); };
@@ -1252,7 +1278,7 @@ function renderSalasApp(q){
       h += `<div class="salagr"><div class="salagh"><span>${tit}</span>${s0 ? (outra ? '<span class="small">outra linha</span>' : `<button class="lnk" data-slinha="${esc(k)}" data-sroom="${esc(sx.nome)}">${todasSel?'Desmarcar linha':'Selecionar linha'}</button>`) : ''}</div>`
         + lista.map(e=>{ const on = SS.sel.has(e.protocolo), pr = s0 && prateleiras().find(p=>p.numero===s0.prateleira);
           return `<div class="selit${on?' on':''}${outra?' apag':''}">${s0?`<button class="selcb" data-ssel="${esc(e.protocolo)}" data-k="${esc(k)}" aria-pressed="${on}" aria-label="Selecionar ${esc(e.protocolo)}">${on?'✓':''}</button>`:''}
-            <button class="item" data-prot="${esc(e.protocolo)}"><span class="prot">${esc(e.protocolo)}</span><span class="side">${e.slotAnterior?esc(L.nomeLado(e.slotAnterior.lado))+' · '+esc(L.nomeAltura(pr?pr.embalagem:e.embalagem, e.slotAnterior.altura)):''}</span>
+            <button class="item" data-prot="${esc(e.protocolo)}"><span class="prot">${esc(e.protocolo)}</span><span class="side">${e.slotAnterior?esc(L.nomeLado(e.slotAnterior.lado))+' · '+esc(L.nomeAltura(e.embalagem, e.slotAnterior.altura)):''}</span>
             <span class="meta">${esc(e.cultivar||'')} · ${esc(e.remessa||e.classificacao||'')} · há ${dur(Date.now()-e.desde)}</span></button></div>`; }).join('') + `</div>`; });
     h += `</div>`; });
   if(!todas.length) h += `<div class="empty">${q?'Nada encontrado.':'Nenhuma amostra em sala.'}</div>`;
@@ -1303,7 +1329,7 @@ function linhasComAmostras(num, andar){
 }
 function renderEtiquetas(){
   const prats = prateleiras(), sel = $('#eqPrat'), atual = +sel.value || (prats[0] && prats[0].numero);
-  sel.innerHTML = prats.map(p=>`<option value="${p.numero}" ${p.numero===atual?'selected':''}>P.${L.p2(p.numero)} · ${esc(L.nomeEmb(p.embalagem))}</option>`).join('');
+  sel.innerHTML = prats.map(p=>`<option value="${p.numero}" ${p.numero===atual?'selected':''}>P.${L.p2(p.numero)} · ${esc(L.nomeEmb(L.embPrat(p,EST)))}</option>`).join('');
   if(!prats.length){ $('#listEtq').innerHTML = '<div class="empty">Nenhuma prateleira cadastrada.</div>'; return; }
   const lin = linhasComAmostras(+sel.value, +$('#eqAndar').value);
   $('#listEtq').innerHTML = lin.length ? lin.map(x=>{ const k = `${sel.value}|${x.a}|${x.l}`, et = L.etiquetaLinha(EST, +sel.value, x.a, x.l);
@@ -1453,11 +1479,11 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27o' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27o' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27p' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27p' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
-    el.innerHTML = app + ' · Script v' + v + (v < 7 ? ' <b style="color:#b42318">(desatualizado: implante a versão 7)</b>' : ''); }
+    el.innerHTML = app + ' · Script v' + v + (v < 8 ? ' <b style="color:#b42318">(desatualizado: implante a versão 8)</b>' : ''); }
   catch(e){ el.textContent = app + ' · Script: sem conexão'; }
 }
 async function iniciarLogin(){

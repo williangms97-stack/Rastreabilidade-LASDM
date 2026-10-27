@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.27l"></script>
+<script src="regras.js?v=2026.10.27m"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27l'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27m'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -267,7 +267,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27l</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27m</div>
     </section>
   </main>
 
@@ -443,15 +443,24 @@ async function tick(){
 function ajudaCamera(msg){
   $('#camMsg').textContent = 'A câmera não abriu. Veja abaixo como resolver.';
   $('#camHelp').hidden = false;
+  const nome = String(msg||'').split(':')[0];
+  const causa = nome==='NotAllowedError' || nome==='SecurityError' ? '<div class="alert bad"><b>Permissão negada.</b> O Chrome (ou o Android) está bloqueando a câmera para este site. Libere nos passos 2 e 4.</div>'
+    : nome==='NotReadableError' || nome==='AbortError' ? '<div class="alert bad"><b>A câmera está ocupada.</b> Outro app (câmera, WhatsApp, chamada de vídeo) está usando. Feche-o e toque em Abrir câmera de novo.</div>'
+    : nome==='NotFoundError' || nome==='OverconstrainedError' ? '<div class="alert bad"><b>Nenhuma câmera disponível</b> para o navegador neste aparelho.</div>' : '';
   $('#camHelp').innerHTML = `<h3>Como liberar a câmera</h3>
     ${window.top!==window.self?'<div class="alert bad">O app está aberto dentro de uma pré-visualização. Abra o link https do app direto no Chrome.</div>':''}
-    <div class="small"><b>1.</b> Abra pelo endereço https no Chrome.<br><b>2.</b> Toque no ícone à esquerda do endereço → Permissões → Câmera → Permitir. Recarregue.<br><b>3.</b> Feche outros apps que estejam usando a câmera.<br>Enquanto isso, use <b>Foto da etiqueta</b>.</div>
+    ${causa}
+    <div class="small"><b>1.</b> Abra pelo endereço https no <b>Chrome</b> (não dentro do WhatsApp/Facebook).<br><b>2.</b> Toque no ícone à esquerda do endereço → <b>Permissões</b> → <b>Câmera</b> → <b>Permitir</b>. Recarregue a página.<br><b>3.</b> Feche outros apps que estejam usando a câmera.<br><b>4.</b> No Android: <b>Configurações → Apps → Chrome → Permissões → Câmera → Permitir</b>.<br>Enquanto isso, use <b>Foto da etiqueta</b> (funciona sem essa permissão).</div>
     <div class="raw">${esc(msg)}</div>`;
 }
 async function startCam(){
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext){ ajudaCamera('Câmera indisponível: a página precisa estar em https:// e aberta no navegador.'); return; }
   try{
-    stream = await navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1080 } } });
+    // tenta do melhor para o mais simples: alguns celulares recusam resolução alta ou a escolha da câmera traseira
+    const pedidos = [ { facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1080 } }, { facingMode:{ ideal:'environment' } }, true ];
+    let ultimoErro = null; stream = null;
+    for(const v of pedidos){ try{ stream = await navigator.mediaDevices.getUserMedia({ audio:false, video:v }); break; }catch(err){ ultimoErro = err; if(err && (err.name==='NotAllowedError' || err.name==='SecurityError')) break; } }
+    if(!stream) throw ultimoErro;
     video.srcObject = stream; video.hidden = false; await video.play();
     const track = stream.getVideoTracks()[0];
     try{ await track.applyConstraints({ advanced:[{ focusMode:'continuous' }] }); }catch(e){}
@@ -1401,7 +1410,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27l' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27l' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27m' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27m' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

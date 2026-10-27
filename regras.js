@@ -39,8 +39,10 @@
 
   /* ---------- Tipos de remessa → grupo de prateleira ---------- */
   const GRUPOS = {
-    VERDE:      { nome: 'Lote / Teste / Devoluções / Entrada / Revalidação / Reembalagem', curto: 'Verde', cor: '#83E28E', tinta: '#0f3d17' },
-    TSI:        { nome: 'TSI (não mistura)', curto: 'TSI', cor: '#F7C7AC', tinta: '#6b2c0b' },
+    VERDE:      { nome: 'Lote / Teste / Entrada semente / Devoluções — análise prévia (CQI)', curto: 'Verde', cor: '#83E28E', tinta: '#0f3d17' },
+    DEFINITIVA: { nome: 'Lote definitivo / Reembalagem / Revalidação — análise definitiva', curto: 'Definitiva', cor: '#1E6B3C', tinta: '#ffffff' },
+    TSI:        { nome: 'TSI — análise prévia (CQI)', curto: 'TSI', cor: '#F7C7AC', tinta: '#6b2c0b' },
+    TSI_DEF:    { nome: 'TSI — análise definitiva', curto: 'TSI Definitiva', cor: '#A4472A', tinta: '#ffffff' },
     PRECOLHEITA:{ nome: 'Pré-colheita', curto: 'Pré-colheita', cor: '#FFFF00', tinta: '#4d4a00' },
     PRELOTE:    { nome: 'Pré-lote', curto: 'Pré-lote', cor: '#D86DCD', tinta: '#3d0b37' },
     CARREG:     { nome: 'Carregamentos', curto: 'Carregamentos', cor: '#4D93D9', tinta: '#ffffff' },
@@ -50,7 +52,7 @@
     OUTROS:     { nome: 'Outros tipos', curto: 'Outros', cor: '#DDDDDD', tinta: '#1f1f1f' }
   };
   const REMESSA_GRUPO = {
-    'LOTE': 'VERDE', 'TESTE': 'VERDE', 'DEVOLUCOES': 'VERDE', 'ENTRADA SEMENTE': 'VERDE', 'REVALIDACAO': 'VERDE', 'REEMBALAGEM': 'VERDE',
+    'LOTE': 'VERDE', 'TESTE': 'VERDE', 'DEVOLUCOES': 'VERDE', 'ENTRADA SEMENTE': 'VERDE', 'REVALIDACAO': 'DEFINITIVA', 'REEMBALAGEM': 'DEFINITIVA',
     'TSI': 'TSI', 'PRE COLHEITA': 'PRECOLHEITA', 'PRE LOTE': 'PRELOTE', 'CARREGAMENTOS': 'CARREG',
     'CARGAS CLASSIFICACAO': 'NAO', 'SECADOR': 'NAO'
   };
@@ -66,11 +68,15 @@
     if (!protocolo) grupo = 'MANUAL';
     else if (/INTER|INTRA/.test(tipo)) grupo = 'INTERLAB';
     else grupo = REMESSA_GRUPO[up(a.remessa)] || (a.remessa ? 'OUTROS' : 'OUTROS');
+    // análise DEFINITIVA tem grupo próprio: Verde → Definitiva (com Reembalagem e Revalidação); TSI → TSI Definitiva
+    const ehDef = /DEFINITIVA/.test(tipo);
+    if (protocolo && ehDef && grupo === 'VERDE') grupo = 'DEFINITIVA';
+    if (protocolo && ehDef && grupo === 'TSI') grupo = 'TSI_DEF';
     const trat = up(a.tratamento);
-    const tratada = grupo === 'TSI' || !!(trat && trat !== '-O-' && trat !== 'SEM TRATAMENTO' && trat !== 'NAO');
+    const tratada = grupo === 'TSI' || grupo === 'TSI_DEF' || !!(trat && trat !== '-O-' && trat !== 'SEM TRATAMENTO' && trat !== 'NAO');
     const inova = /INOVA\s*GENETICA/.test(up(a.produtor));
     // análise DEFINITIVA (ex.: lote definitivo) não divide andar com análise prévia
-    const definitiva = protocolo && /DEFINITIVA/.test(tipo);
+    const definitiva = protocolo && (ehDef || grupo === 'DEFINITIVA' || grupo === 'TSI_DEF');
     return {
       classificacao: protocolo ? 'Protocolo' : 'Entrada de amostra manual',
       cultura: especie || 'NÃO INFORMADA',
@@ -91,7 +97,7 @@
   }
   function textoPerfil(p) {
     if (!p) return 'Livre';
-    return [p.cultura, p.tratada ? 'Tratada' : 'Sem tratamento', p.inova ? 'INOVA GENÉTICA' : 'Demais produtores', ((GRUPOS[p.grupo] || {}).curto || p.grupo) + (p.definitiva ? ' (Definitiva)' : '')].join(' · ');
+    return [p.cultura, p.tratada ? 'Tratada' : 'Sem tratamento', p.inova ? 'INOVA GENÉTICA' : 'Demais produtores', ((GRUPOS[p.grupo] || {}).curto || p.grupo) + (p.definitiva && p.grupo !== 'DEFINITIVA' && p.grupo !== 'TSI_DEF' ? ' (Definitiva)' : '')].join(' · ');
   }
   // explica por que a amostra não pode entrar num andar com outro perfil (a separação é por ANDAR da prateleira)
   function motivosIncompat(pa, pb) {
@@ -100,7 +106,7 @@
     if (pa.cultura !== pb.cultura) m.push('cultura diferente neste andar (' + pb.cultura + ')');
     if (pa.tratada !== pb.tratada) m.push(pb.tratada ? 'andar de amostras tratadas' : 'andar de amostras sem tratamento');
     if (pa.inova !== pb.inova) m.push(pb.inova ? 'andar exclusivo INOVA GENÉTICA' : 'INOVA GENÉTICA não fica no mesmo andar dos demais produtores');
-    if (!!pa.definitiva !== !!pb.definitiva) m.push(pb.definitiva ? 'andar de análise DEFINITIVA' : 'análise DEFINITIVA não fica no mesmo andar da análise prévia');
+    if (!!pa.definitiva !== !!pb.definitiva && pa.grupo === pb.grupo) m.push(pb.definitiva ? 'andar de análise DEFINITIVA' : 'análise DEFINITIVA não fica no mesmo andar da análise prévia');
     if (pa.grupo !== pb.grupo) m.push('andar com tipo de remessa de outro grupo (' + ((GRUPOS[pb.grupo] || {}).curto || pb.grupo) + ')');
     return m;
   }
@@ -511,7 +517,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.10.27i',
+    VERSAO_REGRAS: '2026.10.27j',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

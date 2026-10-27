@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.27g"></script>
+<script src="regras.js?v=2026.10.27h"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27g'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.27h'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -246,7 +246,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
       </div>
       <div class="card">
         <h3>Regras de armazenamento</h3>
-        <div class="small">Uma prateleira só recebe amostras com o <b>mesmo perfil</b>: mesma cultura, mesma condição de tratamento, INOVA GENÉTICA separada dos demais produtores, mesma embalagem e tipos de remessa do mesmo grupo de cor.</div>
+        <div class="small">Cada <b>andar</b> da prateleira só recebe amostras com o <b>mesmo perfil</b>; andares diferentes da mesma prateleira podem ter perfis diferentes. A embalagem vale para a prateleira inteira.</div>
         <table class="rg" id="tabRegras"></table>
       </div>
       <div class="card">
@@ -254,7 +254,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27g</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.27h</div>
     </section>
   </main>
 
@@ -1109,7 +1109,13 @@ function renderMais(){
   const ri = REMOTO.refInfo || {};
   $('#refInfo').textContent = `Na planilha: ${ri.linhas!=null?ri.linhas+' amostras':'—'}${ri.atualizada?' · atualizada em '+ri.atualizada:''}\nNeste aparelho: ${REF.size} amostras recebidas nos últimos ${REF_DIAS} dias` + (db.refEm?` · baixadas às ${new Date(db.refEm).toLocaleString('pt-BR')}`:'');
   $('#tabRegras').innerHTML = Object.entries(L.GRUPOS).map(([k,g])=>{ const tipos = L.TIPOS_REMESSA.filter(t=>L.REMESSA_GRUPO[L.up(t)]===k);
-    return `<tr><td style="background:${g.cor};color:${g.tinta};font-weight:700;width:34%">${esc(g.curto)}</td><td>${esc(tipos.join(', ') || g.nome)}</td></tr>`; }).join('');
+    return `<tr><td style="background:${g.cor};color:${g.tinta};font-weight:700;width:34%">${esc(g.curto)}</td><td>${esc(tipos.join(', ') || g.nome)}</td></tr>`; }).join('')
+    + `<tr><td colspan="2" style="font-weight:700;padding-top:10px">Também separam por andar</td></tr>`
+    + [['Cultura', 'Soja, milho, trigo… cada cultura no seu andar'],
+       ['Tratamento', 'Amostras tratadas não ficam no andar das sem tratamento'],
+       ['INOVA GENÉTICA', 'Andar exclusivo, separado dos demais produtores'],
+       ['Análise DEFINITIVA', 'Não fica no mesmo andar da análise prévia (ex.: LOTE definitivo × LOTE prévia)']]
+      .map(([a,b])=>`<tr><td style="font-weight:700;width:34%">${esc(a)}</td><td>${esc(b)}</td></tr>`).join('');
 }
 $('#btnRef').onclick = async () => { try{ toast('Baixando referência…'); await baixarRef(true); renderMais(); toast('Referência atualizada: '+REF.size+' amostras.'); }catch(e){ toast(e.message); } };
 
@@ -1217,7 +1223,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27g' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27g' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.27h' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27h' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

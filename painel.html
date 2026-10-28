@@ -7,9 +7,9 @@
 <title>Painel LASDM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<script src="regras.js?v=2026.10.28a"></script>
+<script src="regras.js?v=2026.10.28b"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.28a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.28b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -256,7 +256,7 @@ tbody tr:hover{background:#f7fbf9}
   <!-- CONCILIAÇÃO -->
   <section class="pagina" id="conciliacao" hidden>
     <div class="card">
-      <div><h2>Recebidas × registradas no arquivo</h2><div class="sub">Compara as amostras recebidas (planilhas do sistema e manual) com as bipadas no app. Protocolos de soja e milho que ficam no arquivo (sem Cargas classificação, Secador, Carregamentos, Pré-lote e Pré-colheita).</div></div>
+      <div><h2>Recebidas × registradas no arquivo</h2><div class="sub">Compara as amostras recebidas (planilhas do sistema e manual) com as bipadas no app. Protocolos e amostras manuais (M) que ficam no arquivo (sem Cargas classificação, Secador, Carregamentos, Pré-lote e Pré-colheita).</div></div>
       <div class="fbar"><label>Período<select id="cPer"><option value="ano">Ano todo (desde 01/01)</option><option value="120">Últimos 120 dias</option><option value="30">Últimos 30 dias</option><option value="livre">Escolher datas</option></select></label><label>Recebidas de<input type="date" id="cDe"></label><label>até<input type="date" id="cAte"></label>
         <label>Situação<select id="cSit"><option value="falta">Recebidas e não registradas</option><option value="ok">Registradas</option><option value="semref">Registradas sem referência</option><option value="todas">Todas recebidas</option></select></label></div>
       <div id="concDet"></div>
@@ -338,7 +338,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.28a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.28a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.28b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.28b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -450,7 +450,7 @@ function render(){
   renderMovimentos();
   renderRefStatus();
   renderCadastro();
-  $('#rodape').textContent = `Painel versão 2026.10.28a · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
+  $('#rodape').textContent = `Painel versão 2026.10.28b · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -550,13 +550,13 @@ const URL_ = window.URL;
 function renderConciliacao(resumo){
   if(!$('#cDe').value) $('#cDe').value = REF_DESDE; if(!$('#cAte').value) $('#cAte').value = dkey(new Date());
   const de = $('#cDe').value, ate = $('#cAte').value;
-  const noPeriodo = REF.filter(r=>{ const k = L.dataRefKey(r.data); return k && k>=de && k<=ate; }).filter(r=>L.classificar(r).classificacao==='Protocolo');
+  const noPeriodo = REF.filter(r=>{ const k = L.dataRefKey(r.data); return k && k>=de && k<=ate; });
   const recebidas = noPeriodo.filter(contaNoArquivo), naoFicam = noPeriodo.length - recebidas.length;
   const reg = r => !!EST[r.prot];
   const ok = recebidas.filter(reg), falta = recebidas.filter(r=>!reg(r));
-  const semref = Object.values(EST).filter(e=>!REFMAP.has(e.protocolo) && e.classificacao==='Protocolo');
+  const semref = Object.values(EST).filter(e=>!REFMAP.has(e.protocolo));
   const pct = recebidas.length ? Math.round(ok.length/recebidas.length*100) : 0;
-  $('#concSub').textContent = `Recebidas de ${brk(de)} a ${brk(ate)} · soja e milho que ficam no arquivo (${naoFicam.toLocaleString('pt-BR')} de Cargas classificação, Secador, Carregamentos, Pré-lote e Pré-colheita não entram na conta)`;
+  $('#concSub').textContent = `Recebidas de ${brk(de)} a ${brk(ate)} · protocolos e amostras manuais que ficam no arquivo (${naoFicam.toLocaleString('pt-BR')} de Cargas classificação, Secador, Carregamentos, Pré-lote e Pré-colheita não entram na conta)`;
   $('#concResumo').innerHTML = `<div class="bars"><div class="brow" data-ir="conciliacao"><span class="lbl">Registradas no app</span><span class="track"><i style="width:${pct}%;background:#1f7a5c"></i></span><span class="v">${ok.length} de ${recebidas.length} (${pct}%)</span></div>
     <div class="brow" data-ir="conciliacao"><span class="lbl">Para emblocar (recebidas e não registradas)</span><span class="track"><i style="width:${recebidas.length?falta.length/recebidas.length*100:0}%;background:#d9892b"></i></span><span class="v">${falta.length}</span></div>
     <div class="brow" data-ir="conciliacao"><span class="lbl">Registradas sem referência</span><span class="track"><i style="width:${Math.min(100,semref.length)}%;background:#b3261e"></i></span><span class="v">${semref.length}</span></div></div>

@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.28c"></script>
+<script src="regras.js?v=2026.10.28d"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.28c'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.28d'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -299,7 +299,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.28c</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.28d</div>
     </section>
   </main>
 
@@ -1119,7 +1119,7 @@ $('#btnNovaPrat').onclick = () => novaPrateleira();
 function renderArquivo(){
   const est = Object.values(EST), prats = prateleiras(), pp = L.perfisPrateleiras(EST, prats);
   const noArq = est.filter(e=>e.status==='ARQUIVO').length, emSala = est.filter(e=>e.status==='SALA').length;
-  const cap = prats.filter(p=>p.situacao!=='Inativa').reduce((s,p)=>s+L.capPrat(p, EST),0);
+  const cap = prats.filter(p=>p.situacao!=='Inativa').reduce((s,p)=>s+L.capEst(p, EST),0);
   { const fr = L.foraDaRegra(EST, prats);
     $('#foraArq').innerHTML = fr.length ? `<div class="alert warn"><b>${fr.length} ${fr.length===1?'amostra está':'amostras estão'} fora da regra</b> (emblocadas antes de uma regra nova ou sem apoio). Toque para remanejar:<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${fr.map(x=>`<button class="btn ghost sm" data-fr="${esc(x.e.protocolo)}" title="${esc(x.motivos.join('; '))}">${esc(x.e.protocolo)} · ${esc(L.textoSlot(x.e.slot, x.e.embalagem))}</button>`).join('')}</div></div>` : '';
     $('#foraArq').onclick = ev => { const b = ev.target.closest('[data-fr]'); if(b) abrirAmostra(b.dataset.fr); }; }
@@ -1128,7 +1128,7 @@ function renderArquivo(){
     <div class="stat"><div class="n">${cap?Math.round((noArq+emSala)/cap*100):0}%</div><div class="t">Ocupação · ${prats.length} prat.</div></div>`;
   $('#statsArq').onclick = e => { const b = e.target.closest('[data-ir]'); if(b){ filtroAm = b.dataset.ir; show('amostras'); } };
   $('#listPrat').innerHTML = prats.length ? prats.map(p=>{
-    const x = pp[p.numero] || {}, capP = L.capPrat(p, EST), us = x.usadas||0, G = x.perfil ? (L.GRUPOS[x.perfil.grupo]||L.GRUPOS.OUTROS) : null;
+    const x = pp[p.numero] || {}, capP = L.capEst(p, EST), us = x.usadas||0, G = x.perfil ? (L.GRUPOS[x.perfil.grupo]||L.GRUPOS.OUTROS) : null;
     return `<button class="card prat" data-prat="${p.numero}"><div class="hd"><span class="num">P.${L.p2(p.numero)}</span><span class="pill mut">${esc(L.nomeEmb(L.embPrat(p,EST)))}</span>${p.situacao==='Inativa'?'<span class="pill bad">Inativa</span>':''}<span style="margin-left:auto" class="mono">${us}/${capP}</span></div>
       ${andaresHTML(x, p)}
       <div class="bar"><i style="width:${Math.min(100,us/capP*100)}%"></i></div></button>`; }).join('')
@@ -1505,7 +1505,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.28c' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.28c' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.28d' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.28d' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

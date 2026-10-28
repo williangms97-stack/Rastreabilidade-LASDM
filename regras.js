@@ -182,6 +182,9 @@
   const capPrateleira = (k, lin) => capAndar(k, lin) * ANDARES;
   const capAndarPr = (pr, a, est) => { const k = embAndar(pr, a, est); return k ? capAndar(k, pr.linhas) : 0; };
   const capPrat = (pr, est) => [1, 2, 3, 4].reduce((s, a) => s + capAndarPr(pr, a, est), 0);
+  // para exibir ocupação: andar livre e vazio conta como caixinha de 1 kg (a capacidade real só se define com a 1ª amostra)
+  const capAndarEst = (pr, a, est) => capAndar(embAndar(pr, a, est) || 'CX1', pr.linhas);
+  const capEst = (pr, est) => [1, 2, 3, 4].reduce((s, a) => s + capAndarEst(pr, a, est), 0);
   const nomeLado = l => ({ T: 'Trás', F: 'Frente', T1: 'Trás 01', T2: 'Trás 02', F1: 'Frente 01', F2: 'Frente 02' })[l] || l;
   const nomeAltura = (k, h) => (EMBALAGENS[k] && EMBALAGENS[k].letras) ? String.fromCharCode(64 + h) : String(h).padStart(2, '0');
   const p2 = n => String(n).padStart(2, '0');
@@ -547,10 +550,10 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.10.28c',
+    VERSAO_REGRAS: '2026.10.28d',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
-    EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, andaresDe, resumoEmb, embPrat, embAndar, dimAndar, capAndarPr, capPrat, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
+    EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, andaresDe, resumoEmb, embPrat, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, foraDaRegra, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
     ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };

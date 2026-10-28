@@ -7,9 +7,9 @@
 <title>Painel LASDM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<script src="regras.js?v=2026.10.27s"></script>
+<script src="regras.js?v=2026.10.28a"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.27s'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.28a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -81,6 +81,7 @@ h2{margin:0;font-size:18px}
 .cptab td,.cptab th{white-space:nowrap}table.cptab{min-width:0}.cptab tr.on td{background:var(--ok-bg)}
 .btn.ghost{background:transparent;border:1.5px solid var(--line);color:var(--ink)}.btn.danger{background:var(--bad)}
 .fbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+.ckp{grid-template-columns:repeat(4,minmax(0,1fr));margin:4px 0 6px}@media (max-width:700px){.ckp{grid-template-columns:repeat(2,minmax(0,1fr))}}.ckp .kpi{cursor:default}
 .fbar label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .fbar input,.fbar select{height:40px;border:1.5px solid var(--line);border-radius:8px;padding:0 10px;background:var(--surface);min-width:140px;text-transform:none;letter-spacing:0;font-weight:500;color:var(--ink)}
 .btn{height:40px;border:0;border-radius:8px;padding:0 16px;font-weight:700;background:var(--accent);color:#fff;cursor:pointer}
@@ -255,8 +256,8 @@ tbody tr:hover{background:#f7fbf9}
   <!-- CONCILIAÇÃO -->
   <section class="pagina" id="conciliacao" hidden>
     <div class="card">
-      <div><h2>Recebidas × registradas no arquivo</h2><div class="sub">Compara as amostras recebidas (planilhas do sistema e manual) com as bipadas no app. Soja e milho que armazenam no arquivo.</div></div>
-      <div class="fbar"><label>Recebidas de<input type="date" id="cDe"></label><label>até<input type="date" id="cAte"></label>
+      <div><h2>Recebidas × registradas no arquivo</h2><div class="sub">Compara as amostras recebidas (planilhas do sistema e manual) com as bipadas no app. Protocolos de soja e milho que ficam no arquivo (sem Cargas classificação, Secador, Carregamentos, Pré-lote e Pré-colheita).</div></div>
+      <div class="fbar"><label>Período<select id="cPer"><option value="ano">Ano todo (desde 01/01)</option><option value="120">Últimos 120 dias</option><option value="30">Últimos 30 dias</option><option value="livre">Escolher datas</option></select></label><label>Recebidas de<input type="date" id="cDe"></label><label>até<input type="date" id="cAte"></label>
         <label>Situação<select id="cSit"><option value="falta">Recebidas e não registradas</option><option value="ok">Registradas</option><option value="semref">Registradas sem referência</option><option value="todas">Todas recebidas</option></select></label></div>
       <div id="concDet"></div>
       <div id="tbConc"></div>
@@ -337,7 +338,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.27s' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.27s' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.28a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.28a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -376,16 +377,23 @@ $('#btnSair').onclick = () => { try{ sessionStorage.removeItem('lasdmPainel'); }
 
 /* ---------- dados ---------- */
 let DADOS = null, EST = {}, MOVS = [], REF = [], REFMAP = new Map(), ultimo = 0, carregando = false;
-const REF_DIAS = 120;
+// referência: o ano todo, baixada uma vez ao abrir; depois só as amostras novas a cada 15 min
+const REF_DESDE = new Date().getFullYear() + '-01-01', REF_INTERVALO = 15*60000;
+let refEm = 0;
+// tipos de remessa que não ficam no arquivo (não entram na conta de "para emblocar"; o app continua aceitando)
+const NAO_CONTA = { CARREG:'Carregamentos', PRELOTE:'Pré-lote', PRECOLHEITA:'Pré-colheita' };
+const contaNoArquivo = r => { const c = L.classificar(r); return c.armazena && !NAO_CONTA[c.grupo]; };
 let enviandoRef = false;
 async function carregar(){
   if(carregando || enviandoRef || !URL) return; carregando = true;
   $('#dot').className = 'dot busy'; $('#liveTxt').textContent = 'Atualizando…';
   try{
     const desde = Date.now() - 60*86400000;
-    const d = new Date(); d.setDate(d.getDate()-REF_DIAS);
-    const [j, r] = await Promise.all([ get('?acao=dados&desde=' + desde), get('?acao=ref&desde=' + dkey(d)) ]);
-    DADOS = j; REF = r.ref || []; REFMAP = new Map(REF.map(x=>[x.prot, x]));
+    const total = !refEm, buscaRef = total || Date.now() - refEm > REF_INTERVALO;
+    let dRef = REF_DESDE; if(!total){ const m = REF.reduce((x,r)=>{ const k = L.dataRefKey(r.data)||''; return k > x ? k : x; }, REF_DESDE), d = new Date(m+'T12:00'); d.setDate(d.getDate()-3); dRef = dkey(d) < REF_DESDE ? REF_DESDE : dkey(d); }
+    const [j, r] = await Promise.all([ get('?acao=dados&desde=' + desde), buscaRef ? get('?acao=ref&desde=' + dRef) : null ]);
+    DADOS = j;
+    if(r){ if(total) REFMAP = new Map(); (r.ref||[]).forEach(x=>REFMAP.set(x.prot, x)); REF = [...REFMAP.values()]; refEm = Date.now(); }
     MOVS = (j.movimentos||[]).map(m=>Object.assign(m, { ts:Number(m.ts)||0 }));
     EST = L.estadoAtual(MOVS);
     ultimo = Date.now(); $('#erro').hidden = true;
@@ -442,7 +450,7 @@ function render(){
   renderMovimentos();
   renderRefStatus();
   renderCadastro();
-  $('#rodape').textContent = `Painel versão 2026.10.27s · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length} amostras recebidas nos últimos ${REF_DIAS} dias`;
+  $('#rodape').textContent = `Painel versão 2026.10.28a · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -540,22 +548,24 @@ const URL_ = window.URL;
 
 /* ---------- conciliação ---------- */
 function renderConciliacao(resumo){
-  const hoje = new Date(), de0 = new Date(); de0.setDate(de0.getDate()-30);
-  if(!$('#cDe').value) $('#cDe').value = dkey(de0); if(!$('#cAte').value) $('#cAte').value = dkey(hoje);
+  if(!$('#cDe').value) $('#cDe').value = REF_DESDE; if(!$('#cAte').value) $('#cAte').value = dkey(new Date());
   const de = $('#cDe').value, ate = $('#cAte').value;
-  const recebidas = REF.filter(r=>{ const k = L.dataRefKey(r.data); return k && k>=de && k<=ate; }).filter(r=>{ const c = L.classificar(r); return c.classificacao==='Protocolo' && c.armazena; });
+  const noPeriodo = REF.filter(r=>{ const k = L.dataRefKey(r.data); return k && k>=de && k<=ate; }).filter(r=>L.classificar(r).classificacao==='Protocolo');
+  const recebidas = noPeriodo.filter(contaNoArquivo), naoFicam = noPeriodo.length - recebidas.length;
   const reg = r => !!EST[r.prot];
   const ok = recebidas.filter(reg), falta = recebidas.filter(r=>!reg(r));
   const semref = Object.values(EST).filter(e=>!REFMAP.has(e.protocolo) && e.classificacao==='Protocolo');
   const pct = recebidas.length ? Math.round(ok.length/recebidas.length*100) : 0;
-  $('#concSub').textContent = `Recebidas de ${brk(de)} a ${brk(ate)} (soja e milho que armazenam)`;
+  $('#concSub').textContent = `Recebidas de ${brk(de)} a ${brk(ate)} · soja e milho que ficam no arquivo (${naoFicam.toLocaleString('pt-BR')} de Cargas classificação, Secador, Carregamentos, Pré-lote e Pré-colheita não entram na conta)`;
   $('#concResumo').innerHTML = `<div class="bars"><div class="brow" data-ir="conciliacao"><span class="lbl">Registradas no app</span><span class="track"><i style="width:${pct}%;background:#1f7a5c"></i></span><span class="v">${ok.length} de ${recebidas.length} (${pct}%)</span></div>
-    <div class="brow" data-ir="conciliacao"><span class="lbl">Recebidas e não registradas</span><span class="track"><i style="width:${recebidas.length?falta.length/recebidas.length*100:0}%;background:#d9892b"></i></span><span class="v">${falta.length}</span></div>
+    <div class="brow" data-ir="conciliacao"><span class="lbl">Para emblocar (recebidas e não registradas)</span><span class="track"><i style="width:${recebidas.length?falta.length/recebidas.length*100:0}%;background:#d9892b"></i></span><span class="v">${falta.length}</span></div>
     <div class="brow" data-ir="conciliacao"><span class="lbl">Registradas sem referência</span><span class="track"><i style="width:${Math.min(100,semref.length)}%;background:#b3261e"></i></span><span class="v">${semref.length}</span></div></div>
     ${REF.length?'':'<div class="alert warn">Nenhuma planilha de referência enviada ainda. Use a aba "Planilhas de referência".</div>'}`;
   if(resumo && !location.hash.includes('conciliacao')) return;
   const sit = $('#cSit').value;
-  $('#concDet').innerHTML = `<div class="sub">${recebidas.length} recebidas no período · ${ok.length} registradas (${pct}%) · ${falta.length} sem registro · ${semref.length} registradas sem referência</div>`;
+  const n = v => v.toLocaleString('pt-BR');
+  $('#concDet').innerHTML = `<div class="kpis ckp"><div class="kpi"><div class="n">${n(noPeriodo.length)}</div><div class="t">Recebidas no período</div></div><div class="kpi"><div class="n">${n(naoFicam)}</div><div class="t">Não ficam no arquivo</div></div><div class="kpi warn"><div class="n">${n(falta.length)}</div><div class="t">Para emblocar</div></div><div class="kpi"><div class="n">${n(ok.length)}</div><div class="t">Registradas no app (${pct}%)</div></div></div>
+    <div class="sub">Não ficam no arquivo: Cargas classificação, Secador, ${Object.values(NAO_CONTA).join(', ')}. ${semref.length ? n(semref.length)+' registradas sem referência.' : ''}</div>`;
   if(sit==='semref') return tabela('tbConc', [
       { k:'protocolo', t:'Protocolo', cls:'mono', h:e=>esc(e.protocolo) }, { k:'cultivar', t:'Cultivar (digitada)', h:e=>esc(e.cultivar||'') }, { k:'remessa', t:'Remessa', h:e=>esc(e.remessa||'') },
       { k:'local', t:'Onde está', h:e=>esc(e.local) }, { k:'usuario', t:'Por', h:e=>esc(e.usuario||'') } ], semref, 'Nenhuma.', ['protocolo', 1]);
@@ -569,6 +579,8 @@ function renderConciliacao(resumo){
     { k:'st', t:'No app', v:r=>EST[r.prot]?EST[r.prot].local:'', h:r=>EST[r.prot] ? `<span class="pill ok">${esc(EST[r.prot].local)}</span>` : '<span class="pill warn">não registrada</span>' },
     { k:'origem', t:'Planilha', h:r=>esc(r.origem||'') } ], lista, 'Nada neste filtro.', ['prot', 1]);
 }
+$('#cPer').addEventListener('change', ()=>{ const v = $('#cPer').value; if(v==='livre') return; const d = new Date(); if(v!=='ano') d.setDate(d.getDate()-Number(v)); $('#cDe').value = v==='ano' ? REF_DESDE : dkey(d); $('#cAte').value = dkey(new Date()); if(TAB.tbConc) TAB.tbConc.pag = 1; renderConciliacao(false); });
+['#cDe','#cAte'].forEach(id=>$(id).addEventListener('input', ()=>{ $('#cPer').value = 'livre'; }));
 ['#cDe','#cAte','#cSit'].forEach(id=>$(id).addEventListener('change', ()=>{ if(TAB.tbConc) TAB.tbConc.pag = 1; renderConciliacao(false); }));
 
 /* ---------- planilhas de referência: ler (.xls/.xlsx) e enviar ---------- */
@@ -618,7 +630,7 @@ $('#btnEnviarRef').onclick = async () => {
     $('#refPrev').innerHTML += `<div class="sub">Por espécie: ${Object.entries(esp).map(([k,v])=>esc(k)+' '+v).join(' · ')}</div>`;
     if(man.length) $('#refPrev').innerHTML += `<div class="sub">Planilha manual: ${man.length} protocolos M (abas de espécie)${ignoradas.length?'; abas não usadas: '+esc(ignoradas.join(', '))+' (numeração própria ou cópia)':''}.</div>`;
     if(avisosMan.length) $('#refPrev').innerHTML += `<div class="alert warn"><b>${avisosMan.length} números repetidos na planilha manual</b> (o mesmo protocolo M em duas abas, com amostras diferentes). Ficaram marcados para conferência — corrija a numeração na planilha: ${esc(avisosMan.slice(0,12).join(' · '))}${avisosMan.length>12?' …':''}</div>`;
-    $('#admS').value = ''; enviandoRef = false; carregar();
+    $('#admS').value = ''; enviandoRef = false; refEm = 0; carregar();
   }catch(err){ $('#refMsg').innerHTML = `<div class="alert bad">${esc(err.message||err)} Nada foi perdido: clique em "Ler e enviar" de novo.</div>`; }
   finally{ btn.disabled = false; enviandoRef = false; }
 };

@@ -7,9 +7,9 @@
 <title>Painel LASDM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<script src="regras.js?v=2026.10.28b"></script>
+<script src="regras.js?v=2026.10.28c"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.28b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.28c'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -81,6 +81,17 @@ h2{margin:0;font-size:18px}
 .cptab td,.cptab th{white-space:nowrap}table.cptab{min-width:0}.cptab tr.on td{background:var(--ok-bg)}
 .btn.ghost{background:transparent;border:1.5px solid var(--line);color:var(--ink)}.btn.danger{background:var(--bad)}
 .fbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+/* quadros minimizáveis */
+.card h2.dob{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.dobBtn{margin-left:auto;display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--muted);font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.dobBtn svg{width:14px;height:14px;transition:transform .15s}
+.card.min .dobBtn svg{transform:rotate(-90deg)}
+.card.min{gap:0;padding-top:12px;padding-bottom:12px}
+.card.min > :not(:first-child){display:none!important}
+.card.min .sub{display:none}
+.card.min .vzhd .fbar{display:none}
+.dobBar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px}.dobBar .dobBtn{margin-left:0}
+.vzhd>div:first-child{flex:1 1 auto}
 .ckp{grid-template-columns:repeat(4,minmax(0,1fr));margin:4px 0 6px}@media (max-width:700px){.ckp{grid-template-columns:repeat(2,minmax(0,1fr))}}.ckp .kpi{cursor:default}
 .fbar label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .fbar input,.fbar select{height:40px;border:1.5px solid var(--line);border-radius:8px;padding:0 10px;background:var(--surface);min-width:140px;text-transform:none;letter-spacing:0;font-weight:500;color:var(--ink)}
@@ -338,7 +349,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.28b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.28b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.28c' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.28c' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -450,7 +461,7 @@ function render(){
   renderMovimentos();
   renderRefStatus();
   renderCadastro();
-  $('#rodape').textContent = `Painel versão 2026.10.28b · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
+  $('#rodape').textContent = `Painel versão 2026.10.28c · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -720,7 +731,7 @@ $('#impAndar').onchange = () => montarImpLin();
 $('#vzP').onchange = () => { VZ.num = +$('#vzP').value; VZ.lado = null; VZ.sel = null; renderViz(); };
 $('#vzCam').onclick = e => { const b = e.target.closest('[data-l]'); if(!b) return; VZ.lado = b.dataset.l; renderViz(); };
 $('#vz2d').onclick = e => { const c = e.target.closest('[data-k]'); if(!c) return; VZ.sel = VZ.sel===c.dataset.k ? null : c.dataset.k; renderViz(); };
-$('#prats').addEventListener('click', e => { const c = e.target.closest('[data-prat]'); if(!c) return; VZ.num = +c.dataset.prat; VZ.lado = null; VZ.sel = null; renderViz(); $('#vzCard').scrollIntoView({ behavior:'smooth', block:'start' }); });
+$('#prats').addEventListener('click', e => { const c = e.target.closest('[data-prat]'); if(!c) return; VZ.num = +c.dataset.prat; VZ.lado = null; VZ.sel = null; renderViz(); abrirViz(); $('#vzCard').scrollIntoView({ behavior:'smooth', block:'start' }); });
 
 let p3 = null;
 function carregar3D(){
@@ -869,7 +880,7 @@ function renderMapa(){
     <div class="row2"><select id="mpSel"><option value="">— escolha —</option>${prats.filter(x=>!p || x.numero!==p.numero).map(x=>`<option value="${x.numero}">P.${L.p2(x.numero)} · ${esc(L.nomeEmb(L.embPrat(x,EST)))}${x.mapa?' (hoje na '+x.mapa+')':''}</option>`).join('')}</select><button class="btn" id="mpSalvar">Salvar</button></div>
     <div id="mpMsg"></div></div>${legenda}`;
   ligarTips();
-  if($('#mpVer')) $('#mpVer').onclick = () => { VZ.num = p.numero; VZ.lado = null; VZ.sel = null; renderViz(); renderMapa(); $('#vzCard').scrollIntoView({ behavior:'smooth', block:'start' }); };
+  if($('#mpVer')) $('#mpVer').onclick = () => { VZ.num = p.numero; VZ.lado = null; VZ.sel = null; renderViz(); renderMapa(); abrirViz(); $('#vzCard').scrollIntoView({ behavior:'smooth', block:'start' }); };
   if($('#mpTirar')) $('#mpTirar').onclick = () => salvarMapa([Object.assign({}, p, { mapa:'' })]);
   $('#mpSalvar').onclick = () => { const n = +$('#mpSel').value; if(!n){ $('#mpMsg').innerHTML = '<div class="sub">Escolha uma prateleira.</div>'; return; }
     const nova = prats.find(x=>x.numero===n), muda = [Object.assign({}, nova, { mapa:v.id })]; if(p) muda.push(Object.assign({}, p, { mapa:'' }));
@@ -889,7 +900,7 @@ async function salvarMapa(lista){
 // clique: estante com prateleira → abre direto o 3D/2D dela; estante vazia → escolher a prateleira
 $('#mapaSvg').addEventListener('click', e=>{ const g = e.target.closest('[data-vaga]'); if(!g) return; const p = pratNaVaga()[g.dataset.vaga];
   MP.vaga = g.dataset.vaga;
-  if(p){ VZ.num = p.numero; VZ.lado = null; VZ.sel = null; renderViz(); renderMapa(); $('#vzCard').scrollIntoView({ behavior:'smooth', block:'start' }); }
+  if(p){ VZ.num = p.numero; VZ.lado = null; VZ.sel = null; renderViz(); renderMapa(); abrirViz(); $('#vzCard').scrollIntoView({ behavior:'smooth', block:'start' }); }
   else renderMapa(); });
 
 /* ---------- impressão das etiquetas de endereço (mesmo modelo do app) ---------- */
@@ -944,7 +955,7 @@ function mostrarAchados(lista){
 function verNaPrateleira(prot){
   const e = EST[prot]; if(!e || !e.slot) return;
   VZ.num = e.slot.prateleira; VZ.lado = e.slot.lado; VZ.sel = L.chaveSlot(e.slot);
-  renderViz(); $('#vzCard').scrollIntoView({ behavior:'smooth', block:'start' });
+  renderViz(); abrirViz(); $('#vzCard').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 $('#vzBuscar').onclick = localizarProtocolo;
 $('#vzBusca').addEventListener('keydown', e=>{ if(e.key==='Enter') localizarProtocolo(); });
@@ -1049,6 +1060,30 @@ function renderUsuarios(){
   box.querySelectorAll('[data-cus]').forEach(b=>b.onclick = () => { const s = prompt('Nova senha para '+b.dataset.cus+' (mín. 4 caracteres):'); if(s) faz({ op:'senha', usuario:b.dataset.cus, senha:s }, 'Senha alterada.'); });
   box.querySelectorAll('[data-cusit]').forEach(b=>b.onclick = () => faz({ op:'situacao', usuario:b.dataset.cusit }, 'Situação alterada.'));
 }
+
+function abrirViz(){ const c = $('#vzCard'); if(c && c.classList.contains('min')) dobrar(c, false); }
+/* ---------- quadros minimizáveis (o estado fica guardado neste navegador) ---------- */
+const DOB = (()=>{ try{ return JSON.parse(localStorage.getItem('lasdm.dobra')||'{}'); }catch(e){ return {}; } })();
+const salvarDob = () => { try{ localStorage.setItem('lasdm.dobra', JSON.stringify(DOB)); }catch(e){} };
+function dobrar(card, min){
+  card.classList.toggle('min', min); DOB[card.dataset.dob] = min ? 1 : 0; salvarDob();
+  const b = card.querySelector('.dobBtn'); if(b) b.lastChild.textContent = min ? 'Expandir' : 'Minimizar';
+  if(!min && card.id==='vzCard'){ renderViz(); } else if(!min && card.id==='mapaCard') renderMapa();
+}
+document.querySelectorAll('section.pagina .card').forEach(card=>{
+  const h = card.firstElementChild && (card.firstElementChild.querySelector(':scope > h2, :scope > div > h2')); if(!h) return;
+  card.dataset.dob = h.textContent.trim(); h.classList.add('dob');
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'dobBtn'; b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 9l6 6 6-6"/></svg><span>Minimizar</span>';
+  h.appendChild(b);
+  h.addEventListener('click', e=>{ if(e.target.closest('select,input,a')) return; dobrar(card, !card.classList.contains('min')); });
+  if(DOB[card.dataset.dob]) dobrar(card, true);
+});
+// atalho no topo de cada aba: minimizar / expandir todos
+document.querySelectorAll('section.pagina').forEach(sec=>{ if(sec.querySelectorAll('h2.dob').length < 2) return;
+  const bar = document.createElement('div'); bar.className = 'dobBar';
+  bar.innerHTML = '<button type="button" class="dobBtn" data-t="1">Minimizar todos</button><button type="button" class="dobBtn" data-t="0">Expandir todos</button>';
+  bar.onclick = e => { const b = e.target.closest('[data-t]'); if(!b) return; sec.querySelectorAll('.card[data-dob]').forEach(c=>dobrar(c, b.dataset.t==='1')); };
+  sec.insertBefore(bar, sec.firstChild); });
 
 function iniciar(){
   $('#loginScr').hidden = true; $('#main').hidden = false;

@@ -7,6 +7,34 @@
 <title>Painel LASDM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<script>
+/* ===== Banco de dados: Supabase. As chamadas ao endereço do banco (antes a planilha) viram chamadas às funções api_get/api_post. ===== */
+(function(){
+  const SUPA_URL = 'https://bnlqboemqhyjubndmnif.supabase.co', SUPA_KEY = 'sb_publishable_nD_ikw_0-8uDAbPL730qrQ_wWMHDpCm', BASE = SUPA_URL + '/lasdm';
+  const H = { apikey:SUPA_KEY, Authorization:'Bearer ' + SUPA_KEY };
+  const nativo = window.fetch.bind(window);
+  const rpc = async (fn, args) => { const r = await nativo(SUPA_URL + '/rest/v1/rpc/' + fn, { method:'POST', headers:Object.assign({ 'Content-Type':'application/json' }, H), body:JSON.stringify(args) });
+    const t = await r.text(); if(!r.ok){ let m = ''; try{ const j = JSON.parse(t); m = j.message || j.error || ''; }catch(e){} return JSON.stringify({ ok:false, erro: m || ('Erro ' + r.status + ' na planilha') }); } return t; };
+  async function subirFoto(m){   // foto da etiqueta → pasta "fotos" do Supabase; o movimento guarda só o link
+    const nome = String(m.id) + '.jpg', b = Uint8Array.from(atob(m.foto), c => c.charCodeAt(0));
+    const r = await nativo(SUPA_URL + '/storage/v1/object/fotos/' + encodeURIComponent(nome), { method:'POST', headers:Object.assign({ 'Content-Type':'image/jpeg', 'x-upsert':'false' }, H), body:new Blob([b], { type:'image/jpeg' }) });
+    if(!r.ok && r.status !== 409 && r.status !== 400) throw new Error('Falha ao enviar a foto (' + r.status + ')');
+    return SUPA_URL + '/storage/v1/object/public/fotos/' + encodeURIComponent(nome);
+  }
+  window.fetch = async function(entrada, opts){
+    const url = typeof entrada === 'string' ? entrada : (entrada && entrada.url) || '';
+    if(url.indexOf(BASE) !== 0) return nativo(entrada, opts);
+    const resp = t => new Response(t, { status:200, headers:{ 'Content-Type':'application/json' } });
+    if(opts && String(opts.method || '').toUpperCase() === 'POST'){
+      const d = JSON.parse(opts.body || '{}');
+      for(const m of (d.movimentos || [])){ if(m.foto){ try{ m.fotoUrl = await subirFoto(m); }catch(e){ m.fotoUrl = 'Erro ao salvar foto: ' + e.message; } delete m.foto; } }
+      return resp(await rpc('api_post', { d }));
+    }
+    const p = Object.fromEntries(new URLSearchParams(url.split('?')[1] || ''));   // (o painel tem uma variável chamada URL)
+    return resp(await rpc('api_get', { p }));
+  };
+})();
+</script>
 <script src="regras.js?v=2026.10.28f"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
 (function(){ var V='2026.10.28f'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
@@ -339,7 +367,7 @@ tbody tr:hover{background:#f7fbf9}
 <script>
 'use strict';
 const L = window.LASDM;
-const URL_PLANILHA = 'https://script.google.com/macros/s/AKfycbyviY6zm8MIhRt2UDodqbc8aOsE8O61vM45LdEuwcAMWt43EqNQsOT_fxSKymXJtRTd7g/exec';
+const URL_PLANILHA = 'https://bnlqboemqhyjubndmnif.supabase.co/lasdm';
 const ATUALIZA_MS = 60000;
 const $ = s => document.querySelector(s);
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -382,7 +410,7 @@ const get = q => fetch(URL + q, { redirect:'follow' }).then(lerResposta);
 $('#lgUrlBox').hidden = !!URL;
 $('#loginForm').onsubmit = async e => {
   e.preventDefault();
-  if(!URL){ const u = $('#lgUrl').value.trim(); if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(u)){ $('#lgMsg').innerHTML = '<div class="alert bad">Informe o endereço da planilha do LASDM.</div>'; return; } URL = u; try{ localStorage.setItem('lasdm.painel.url', u); }catch(e){} }
+  if(!URL){ const u = $('#lgUrl').value.trim(); if(!/^https:\/\/(script\.google(usercontent)?\.com|[a-z0-9]+\.supabase\.co)\//.test(u)){ $('#lgMsg').innerHTML = '<div class="alert bad">Informe o endereço da planilha do LASDM.</div>'; return; } URL = u; try{ localStorage.setItem('lasdm.painel.url', u); }catch(e){} }
   const usuario = $('#lgUsuario').value.trim().toLowerCase(), senha = $('#lgSenha').value;
   $('#lgBtn').disabled = true; $('#lgBtn').textContent = 'Entrando…';
   try{ const j = await post({ acao:'login', usuario, senha, aparelho:'Painel' }); SESSAO = { usuario, nome:j.usuario.nome, perfil:j.usuario.perfil }; try{ sessionStorage.setItem('lasdmPainel', JSON.stringify(SESSAO)); }catch(e){} iniciar(); }

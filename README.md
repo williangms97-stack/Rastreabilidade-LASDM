@@ -9,7 +9,8 @@ Rastreamento das amostras de sementes no arquivo refrigerado do Laboratório de 
 - `index.html` — app de bipagem: QR + foto da etiqueta, leitura do texto (OCR), conferência com as planilhas, sugestão de posição, salas e etiquetas das linhas.
 - `painel.html` — indicadores, ocupação das prateleiras, salas, conciliação (recebidas × registradas), movimentos e envio das planilhas de referência.
 - `regras.js` — regras compartilhadas: grupos de tipo de remessa, perfil da prateleira, endereçamento e etiqueta da linha.
-- `apps-script/Codigo.gs` — banco de dados na Planilha Google (Movimentos, Prateleiras, Referência, Usuários).
+- `supabase/01_estrutura.sql` — banco de dados no Supabase (projeto "Rastreabilidade LASDM", São Paulo) desde 29/10/2026: tabelas e funções `api_get`/`api_post`.
+- `apps-script/Codigo.gs` — script da Planilha Google usado até 29/10/2026 (a planilha fica como backup).
 
 ## Implantação do banco de dados
 1. Crie uma planilha Google nova (só para o LASDM).

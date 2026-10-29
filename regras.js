@@ -59,6 +59,16 @@
   const TIPOS_REMESSA = ['LOTE', 'TESTE', 'DEVOLUÇÕES', 'ENTRADA SEMENTE', 'REVALIDAÇÃO', 'REEMBALAGEM', 'TSI', 'PRE COLHEITA', 'PRE LOTE', 'CARREGAMENTOS', 'CARGAS CLASSIFICAÇÃO', 'SECADOR'];
   const CULTURAS_PROTOCOLO = ['SOJA', 'MILHO'];
 
+  /* Produtos e fórmulas de tratamento de sementes (planilha "Fórmulas TSI 2026" + nomes usados na referência).
+     Se o campo Tratamento tiver um destes nomes, a amostra é tratada; o operador pode corrigir na ficha (Tratada? Sim/Não). */
+  const PRODUTOS_TRATAMENTO = ['STANDAK', 'STK', 'POTENTE', 'DERMACOR', 'DMC', 'FORTENZA', 'VICT', 'GUARDIAO', 'ILEVO', 'IL EVO', 'LMZ',
+    'ACORDA', 'BIOFIX', 'LABSEC', 'LABFIX', 'PROTEC', 'VOTIVO', 'VITOVU', 'LUMITREO', 'POLIMERO', 'PONCHO', 'ACRONIS', 'MAXIM', 'RAIZ PRIME',
+    'FIPRONIL', 'TRATAMENTO', 'TRATADA', 'TRATADO'];
+  const RX_TRATAMENTO = new RegExp('(^|[^A-Z])(' + PRODUTOS_TRATAMENTO.map(t => t.replace(/ /g, '\\s*')).join('|') + ')', 'i');
+  const ehTratamento = t => { const v = String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+    if (!v || /^(-O-|NAO|N|0)$/.test(v) || /\b(SEM|NAO)\s+(TRATAMENTO|TRATADA|TRATADO)\b/.test(v)) return false;
+    return RX_TRATAMENTO.test(v); };
+
   /* Classifica uma amostra (dados vindos das planilhas ou digitados) */
   function classificar(a) {
     const especie = up(a.especie);
@@ -72,8 +82,10 @@
     const ehDef = /DEFINITIVA/.test(tipo);
     if (protocolo && ehDef && grupo === 'VERDE') grupo = 'DEFINITIVA';
     if (protocolo && ehDef && grupo === 'TSI') grupo = 'TSI_DEF';
-    const trat = up(a.tratamento);
-    const tratada = grupo === 'TSI' || grupo === 'TSI_DEF' || !!(trat && trat !== '-O-' && trat !== 'SEM TRATAMENTO' && trat !== 'NAO');
+    // tratada: remessa TSI ou nome de produto/fórmula de tratamento no campo Tratamento (texto livre da planilha)
+    const tratada = grupo === 'TSI' || grupo === 'TSI_DEF' || ehTratamento(a.tratamento);
+    // amostra tratada vai com o TSI, qualquer que seja a remessa: análise prévia → TSI; definitiva → TSI Definitiva
+    if (protocolo && tratada && ['TSI', 'TSI_DEF', 'NAO', 'INTERLAB'].indexOf(grupo) < 0) grupo = (ehDef || grupo === 'DEFINITIVA') ? 'TSI_DEF' : 'TSI';
     const inova = /INOVA\s*GENETICA/.test(up(a.produtor));
     // análise DEFINITIVA (ex.: lote definitivo) não divide andar com análise prévia
     const definitiva = protocolo && (ehDef || grupo === 'DEFINITIVA' || grupo === 'TSI_DEF');
@@ -580,10 +592,10 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.10.29a',
+    VERSAO_REGRAS: '2026.10.29b',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
-    EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
+    EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, foraDaRegra, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
     ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };

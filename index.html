@@ -38,9 +38,9 @@
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.10.28f"></script>
+<script src="regras.js?v=2026.10.29a"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.28f'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.10.29a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -327,7 +327,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.10.28f</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.10.29a</div>
     </section>
   </main>
 
@@ -1028,6 +1028,17 @@ function perguntarSequencia(fs, prot, slot, emb){
     $('#sqSim').onclick = () => res(true); $('#sqNao').onclick = () => res(false);
   });
 }
+// pular endereços de propósito: pergunta uma vez; "Sim" faz a sugestão seguir a partir desta posição
+function perguntarPulo(lista, slot, emb){
+  return new Promise(res => {
+    sheet(`<h2>Pular endereços?</h2>
+      <div class="small">Você vai emblocar em <b>${esc(L.textoSlot(slot, emb))}</b>, mas ${lista.length===1?'fica 1 posição vazia':'ficam '+lista.length+' posições vazias'} para trás neste andar:</div>
+      <div class="alert warn">${esc(L.textoPulados(lista, emb))}</div>
+      <div class="small">Se pular, a sequência continua a partir desta posição e o app não volta a sugerir ${lista.length===1?'esse endereço':'esses endereços'}. ${lista.length===1?'Ele continua livre':'Eles continuam livres'} para uso pelo "Escolher posição".</div>
+      <button class="btn" id="plSim">Sim, pular e seguir daqui</button><button class="btn ghost" id="plNao">Não, voltar para a posição sugerida</button>`);
+    $('#plSim').onclick = () => res(true); $('#plNao').onclick = () => res(false);
+  });
+}
 let ultimoTs = 0;
 async function registrar(c, acao, op, silencioso){
   const { a } = c, cls = L.classificar(a), agora = new Date();
@@ -1036,6 +1047,10 @@ async function registrar(c, acao, op, silencioso){
   if(acao==='ARMAZENAR' && atual && atual.slot && (atual.status==='ARQUIVO' || atual.status==='SALA')) return falha(`${a.protocolo} já está emblocado em ${L.textoSlot(atual.slot, atual.embalagem)}. Um protocolo não pode ser emblocado duas vezes.`);
   const ins = op.inserir && op.slot && op.inserir.slot === op.slot ? op.inserir : null;
   if(op.slot && !ins){ const m = L.validarPosicao(a, c.emb, op.slot, EST, prateleiras(), a.protocolo); if(m.length && acao!=='RETORNO') return falha(m[0]); }
+  // deixou endereços vazios para trás no andar: pergunta se quer pular (o retorno à posição de origem não pergunta)
+  let pulo = '';
+  if(!silencioso && op.slot && !ins && (acao==='ARMAZENAR' || acao==='REMANEJAR')){ const pul = L.enderecosPulados(c.emb, op.slot, EST, prateleiras(), a.protocolo);
+    if(pul.length){ if(!(await perguntarPulo(pul, op.slot, c.emb))){ telaAmostra(c); return; } pulo = 'Pulou endereços: ' + L.textoPulados(pul, c.emb); } }
   // protocolo menor que o anterior na sequência do andar: pergunta antes (o retorno à posição de origem não pergunta)
   if(!silencioso && op.slot && !ins && (acao==='ARMAZENAR' || acao==='REMANEJAR')){ const ant = foraDeSequencia(a.protocolo, op.slot);
     if(ant && !(await perguntarSequencia(ant, a.protocolo, op.slot, c.emb))){ telaAmostra(c); return; } }
@@ -1049,6 +1064,7 @@ async function registrar(c, acao, op, silencioso){
     validacao: validacaoTexto(c), lido: [c.ctx.lido && c.ctx.lido.prot, c.ctx.lido && c.ctx.lido.rem && 'Rem. '+c.ctx.lido.rem, c.ctx.lido && c.ctx.lido.cultivar, c.ctx.lido && c.ctx.lido.remessa, c.ctx.codigo && 'QR '+c.ctx.codigo].filter(Boolean).join(' · '),
     usuario: quem(), aparelho: navigator.userAgent.slice(0,60), temFoto: !!c.ctx.foto, enviado: false
   };
+  if(pulo) m.obs = pulo;
   if(c.ctx.foto){ await fotoPut(m.id, c.ctx.foto); c.ctx.foto = null; }   // a foto vai só no primeiro movimento da leitura
   // volta à posição de origem: primeiro as de cima sobem (da mais alta para a mais baixa), depois ela entra no lugar
   const subiram = ins ? ins.sobem.slice().sort((x,y)=>y.de.altura-x.de.altura) : [];
@@ -1533,7 +1549,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.28f' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.28f' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.10.29a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.29a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

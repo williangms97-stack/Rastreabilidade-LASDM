@@ -426,7 +426,8 @@ const REF_DESDE = new Date().getFullYear() + '-01-01', REF_INTERVALO = 15*60000;
 let refEm = 0;
 // tipos de remessa que não ficam no arquivo (não entram na conta de "para emblocar"; o app continua aceitando)
 const NAO_CONTA = { CARREG:'Carregamentos', PRELOTE:'Pré-lote', PRECOLHEITA:'Pré-colheita' };
-const contaNoArquivo = r => { const c = L.classificar(r); return c.armazena && !NAO_CONTA[c.grupo]; };
+// a remessa decide se conta (um Carregamento tratado vai para o TSI se for emblocado, mas continua fora da contagem)
+const contaNoArquivo = r => { const c = L.classificar(r); return c.armazena && !NAO_CONTA[c.grupo] && !NAO_CONTA[L.REMESSA_GRUPO[L.up(r.remessa)]]; };
 let enviandoRef = false;
 async function carregar(){
   if(carregando || enviandoRef || !URL) return; carregando = true;

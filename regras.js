@@ -181,14 +181,18 @@
     const e = EMB_CODIGOS.indexOf(pr.embalagem) >= 0 ? pr.embalagem : ''; return [e, e, e, e];
   }
   const resumoEmb = arr => { const u = [...new Set(arr)]; return u.length === 1 && u[0] ? u[0] : 'MISTO'; };
-  // embalagem do andar; se for livre e houver estado, a da primeira amostra do andar ('' = livre e vazio)
+  /* embalagem do andar; se for livre, sai das amostras que estão nele ('' = livre e vazio).
+     Não depende da ordem das amostras: saco kraft → kraft; havendo caixinha de 1 kg → 1 kg (a de 0,5 kg cabe no andar de 1 kg);
+     só caixinhas de 0,5 kg → 0,5 kg. */
   function embAndar(pr, a, est) {
     const f = andaresDe(pr)[a - 1]; if (f || !est || !pr) return f;
-    for (const e of Object.values(est)) { const s = e.slot; if (s && (e.status === 'ARQUIVO' || e.status === 'SALA') && Number(s.prateleira) === Number(pr.numero) && s.andar === a) return e.embalagem || ''; }
-    return '';
+    const tem = {};
+    for (const e of Object.values(est)) { const s = e.slot; if (s && (e.status === 'ARQUIVO' || e.status === 'SALA') && Number(s.prateleira) === Number(pr.numero) && Number(s.andar) === Number(a)) tem[e.embalagem || ''] = 1; }
+    return tem.KRAFT ? 'KRAFT' : tem.CX1 ? 'CX1' : tem.CX05 ? 'CX05' : Object.keys(tem).find(k => k) || '';
   }
   // resumo para exibir: embalagem única, 'MISTO' ou '' (todos os andares livres e vazios)
-  const embPrat = (pr, est) => { const arr = [1, 2, 3, 4].map(a => embAndar(pr, a, est)); return arr.every(k => !k) ? '' : resumoEmb(arr); };
+  // andares livres e vazios não contam: 1 kg + 3 andares livres = "Caixinha 1 kg" (não "Misto")
+  const embPrat = (pr, est) => { const arr = [1, 2, 3, 4].map(a => embAndar(pr, a, est)).filter(Boolean); return arr.length ? resumoEmb(arr) : ''; };
   function dimAndar(pr, a, est, padrao) { const k = embAndar(pr, a, est) || padrao || ''; const e = EMBALAGENS[k]; return e ? Object.assign({}, e, { codigo: k, linhas: nLinhas(k, pr.linhas) }) : null; }
   const dimPrat = (pr, a, est) => dimAndar(pr, a || 1, est, 'CX1');
   const temCaixinha = pr => andaresDe(pr).some(k => !k || LINHAS_OPCOES[k]);
@@ -261,7 +265,7 @@
       if (!e.slot || !(e.status === 'ARQUIVO' || e.status === 'SALA')) return;
       const k = e.slot.prateleira; const pr = r[k] || (r[k] = novo({ numero: k, embalagem: e.embalagem, situacao: 'Ativa' }));
       const an = pr.andares[e.slot.andar] || (pr.andares[e.slot.andar] = { perfil: null, usadas: 0 });
-      if (!an.perfil) { an.emb = andaresDe(pr.prateleira)[e.slot.andar - 1] || e.embalagem || ''; an.perfil = perfil(e, an.emb); }
+      if (!an.perfil) { an.emb = embAndar(pr.prateleira, e.slot.andar, est) || e.embalagem || ''; an.perfil = perfil(e, an.emb); }
       an.usadas++; pr.usadas++; pr.amostras.push(e);
     });
     Object.values(r).forEach(pr => {
@@ -592,7 +596,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.10.29b',
+    VERSAO_REGRAS: '2026.10.30a',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

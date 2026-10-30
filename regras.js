@@ -182,13 +182,13 @@
   }
   const resumoEmb = arr => { const u = [...new Set(arr)]; return u.length === 1 && u[0] ? u[0] : 'MISTO'; };
   /* embalagem do andar; se for livre, sai das amostras que estão nele ('' = livre e vazio).
-     Não depende da ordem das amostras: saco kraft → kraft; havendo caixinha de 1 kg → 1 kg (a de 0,5 kg cabe no andar de 1 kg);
-     só caixinhas de 0,5 kg → 0,5 kg. */
+     Não depende da ordem das amostras: saco kraft → kraft; caixinhas (1 kg e/ou 0,5 kg) → andar de caixinha de 1 kg,
+     que aceita os dois tamanhos (a de 0,5 kg ocupa as posições Trás 02 · Trás 01 · Frente 02 · Frente 01). */
   function embAndar(pr, a, est) {
     const f = andaresDe(pr)[a - 1]; if (f || !est || !pr) return f;
     const tem = {};
     for (const e of Object.values(est)) { const s = e.slot; if (s && (e.status === 'ARQUIVO' || e.status === 'SALA') && Number(s.prateleira) === Number(pr.numero) && Number(s.andar) === Number(a)) tem[e.embalagem || ''] = 1; }
-    return tem.KRAFT ? 'KRAFT' : tem.CX1 ? 'CX1' : tem.CX05 ? 'CX05' : Object.keys(tem).find(k => k) || '';
+    return tem.KRAFT ? 'KRAFT' : (tem.CX1 || tem.CX05) ? 'CX1' : Object.keys(tem).find(k => k) || '';
   }
   // resumo para exibir: embalagem única, 'MISTO' ou '' (todos os andares livres e vazios)
   // andares livres e vazios não contam: 1 kg + 3 andares livres = "Caixinha 1 kg" (não "Misto")
@@ -291,7 +291,8 @@
       let antes = null;
       for (const s of ordemSlots(c.pr.numero, emb, c.pr.linhas, c.a)) if (!checarEspaco(cel, s, h => nomeAltura(k, h))) { if (ordemEndereco(s) > ini) return s; if (!antes) antes = s; }
       return antes; };
-    const obs = c => c.ea === 'CX1' && embalagem === 'CX05' ? ' (caixinha de 0,5 kg em andar de 1 kg)' : c.ea === '' ? ' (andar livre: passa a ser de ' + nomeEmb(embalagem) + ')' : '';
+    const obs = c => c.ea === '' ? ' (andar livre: passa a ser de ' + (embalagem === 'KRAFT' ? nomeEmb('KRAFT') : 'caixinhas — 1 kg e 0,5 kg') + ')'
+      : c.ea === 'CX1' && embalagem === 'CX05' && andaresDe(c.pr)[c.a - 1] ? ' (caixinha de 0,5 kg em andar de 1 kg)' : '';
     const perfilAndar = c => { const x = pp[c.pr.numero]; return x && x.andares[c.a] ? x.andares[c.a].perfil : null; };
     // 1º: andar que já tem o mesmo perfil (continua a sequência)
     for (const c of cands) { const pa = perfilAndar(c);
@@ -596,7 +597,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.10.30a',
+    VERSAO_REGRAS: '2026.10.30b',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

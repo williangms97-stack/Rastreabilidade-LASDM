@@ -28,18 +28,20 @@
     if(opts && String(opts.method || '').toUpperCase() === 'POST'){
       const d = JSON.parse(opts.body || '{}');
       if(d.acao === 'filtro') return resp(await rpc('api_filtro', { d }));
+      if(d.acao === 'reserva') return resp(await rpc('api_reserva', { d }));
       for(const m of (d.movimentos || [])){ if(m.foto){ try{ m.fotoUrl = await subirFoto(m); }catch(e){ m.fotoUrl = 'Erro ao salvar foto: ' + e.message; } delete m.foto; } }
       return resp(await rpc('api_post', { d }));
     }
     const p = Object.fromEntries(new URLSearchParams(url.split('?')[1] || ''));   // (o painel tem uma variável chamada URL)
     if(p.acao === 'filtro') return resp(await rpc('api_filtro', { d:{ op:'ler' } }));
+    if(p.acao === 'reserva') return resp(await rpc('api_reserva', { d:{ op:'listar' } }));
     return resp(await rpc('api_get', { p }));
   };
 })();
 </script>
-<script src="regras.js?v=2026.11.03a"></script>
+<script src="regras.js?v=2026.11.03b"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.11.03a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.11.03b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -279,6 +281,7 @@ tbody tr:hover{background:#f7fbf9}
 
   <!-- ARQUIVO E SALAS -->
   <section class="pagina" id="arquivo" hidden>
+    <div class="card" style="margin-bottom:18px" id="resCard" hidden><div><h2>Andares em uso agora</h2><div class="sub">Operadores que reservaram um andar no app. A sugestão de cada um vem no seu andar e os outros aparelhos não usam esse andar. A reserva é liberada ao sair do app ou após 30 min sem bipar.</div></div><div id="resBox"></div></div>
     <div class="card" style="margin-bottom:18px"><div class="fbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
       <label>Localizar protocolo<input type="search" id="vzBusca" placeholder="ex.: 13432, 13432/2026 ou M80" autocomplete="off" style="min-width:240px"></label>
       <button class="btn" id="vzBuscar">Localizar</button><button class="btn sec" id="vzLimpar">Limpar</button></div>
@@ -404,7 +407,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.11.03a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.03a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.11.03b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.03b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -470,6 +473,7 @@ async function carregar(){
     let dRef = REF_DESDE; if(!total){ const m = REF.reduce((x,r)=>{ const k = L.dataRefKey(r.data)||''; return k > x ? k : x; }, REF_DESDE), d = new Date(m+'T12:00'); d.setDate(d.getDate()-3); dRef = dkey(d) < REF_DESDE ? REF_DESDE : dkey(d); }
     const [j, r, fl] = await Promise.all([ get('?acao=dados&desde=' + desde), buscaRef ? get('?acao=ref&desde=' + dRef) : null,
       get('?acao=filtro').catch(e=>({ ok:false, erro:e.message })) ]);
+    try{ const rs = await get('?acao=reserva'); RESERVAS = rs.reservas || []; RES_AGORA = Number(rs.agora)||Date.now(); RES_ERRO = ''; }catch(e){ RESERVAS = []; RES_ERRO = e.message || 'indisponível'; }
     if(fl && fl.ok){ FILTRO = fl.filtro && fl.filtro.remessa ? fl.filtro : null; FILTRO_HIST = fl.historico || []; FILTRO_ERRO = ''; } else FILTRO_ERRO = (fl && fl.erro) || 'indisponível';
     DADOS = j;
     if(r){ if(total) REFMAP = new Map(); (r.ref||[]).forEach(x=>REFMAP.set(x.prot, x)); REF = [...REFMAP.values()]; refEm = Date.now(); }
@@ -521,6 +525,7 @@ function render(){
   $('#barsGrupo').innerHTML = gs.length ? gs.map(([g,v])=>{ const G = L.GRUPOS[g]||L.GRUPOS.OUTROS; return `<div class="brow"><span class="lbl"><span class="swatch" style="background:${G.cor}"></span>${esc(G.curto)}</span><span class="track"><i style="width:${v/maxG*100}%;background:${G.cor};border-right:1px solid rgba(0,0,0,.25)"></i></span><span class="v">${v}</span></div>`; }).join('') : '<div class="empty">Nenhuma amostra no arquivo.</div>';
 
   renderConciliacao(true);
+  renderReservas();
   renderPrateleiras();
   renderViz();
   renderMapa();
@@ -529,7 +534,7 @@ function render(){
   renderMovimentos();
   renderRefStatus();
   renderCadastro();
-  $('#rodape').textContent = `Painel versão 2026.11.03a · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
+  $('#rodape').textContent = `Painel versão 2026.11.03b · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -661,6 +666,25 @@ function renderConciliacao(resumo){
     { k:'st', t:'No app', v:r=>EST[r.prot]?EST[r.prot].local:'', h:r=>EST[r.prot] ? `<span class="pill ok">${esc(EST[r.prot].local)}</span>` : '<span class="pill warn">não registrada</span>' },
     { k:'origem', t:'Planilha', h:r=>esc(r.origem||'') } ], lista, 'Nada neste filtro.', ['prot', 1]);
 }
+/* ---------- reservas de andar (operadores no app) ---------- */
+let RESERVAS = [], RES_ERRO = '', RES_AGORA = 0;
+function renderReservas(){
+  const card = $('#resCard'); if(!card) return;
+  if(RES_ERRO && !RESERVAS.length){ card.hidden = !(SESSAO && SESSAO.perfil==='Administrador'); $('#resBox').innerHTML = '<div class="alert warn">O banco ainda não tem a reserva de andar (rode o arquivo <b>supabase/04_reserva_andar.sql</b> no SQL Editor do Supabase).</div>'; return; }
+  card.hidden = false; const adm = SESSAO && SESSAO.perfil==='Administrador', agora = RES_AGORA || Date.now();
+  const min = t => Math.max(0, Math.round((agora - t)/60000));
+  $('#resBox').innerHTML = RESERVAS.length ? `<div class="tw"><table><thead><tr><th>Andar</th><th>Operador</th><th>Desde</th><th>Última bipagem</th>${adm?'<th></th>':''}</tr></thead><tbody>${RESERVAS.map(r=>{ const m = min(r.ultimo), falta = 30 - m;
+      return `<tr><td class="mono">${esc(L.textoAndar(r.prateleira, r.andar))}</td><td>${esc(r.nome||r.usuario)}</td><td>${new Date(r.desde).toLocaleTimeString('pt-BR').slice(0,5)}</td>
+        <td>${m<1?'agora':'há '+m+' min'}${falta<=5?` · <b style="color:var(--warn)">libera em ${Math.max(falta,0)} min</b>`:''}</td>${adm?`<td><button class="btn ghost" style="height:32px" data-rlib="${r.prateleira}-${r.andar}">Liberar</button></td>`:''}</tr>`; }).join('')}</tbody></table></div>
+      ${adm && !ADM ? '<label style="display:flex;flex-direction:column;font-size:12px;color:var(--muted);margin-top:8px;max-width:260px">Senha de administrador (para liberar)<input type="password" id="resSenha" autocomplete="current-password" style="height:36px"></label>' : ''}<div id="resMsgP"></div>`
+    : '<div class="sub">Nenhum andar reservado no momento.</div>';
+  $('#resBox').querySelectorAll('[data-rlib]').forEach(b=>b.onclick = async ()=>{ const [p,a] = b.dataset.rlib.split('-').map(Number);
+    const adm = ADM || { usuario:SESSAO.usuario, senha:($('#resSenha')||{}).value||'' };
+    if(!adm.senha){ $('#resMsgP').innerHTML = '<div class="alert warn" style="margin-top:8px">Digite sua senha de administrador.</div>'; return; }
+    try{ const j = await post({ acao:'reserva', op:'liberar', admin:adm, prateleira:p, andar:a }); ADM = adm; RESERVAS = j.reservas||[]; RES_AGORA = Number(j.agora)||Date.now(); renderReservas(); }
+    catch(e){ $('#resMsgP').innerHTML = `<div class="alert bad" style="margin-top:8px">${esc(e.message)}</div>`; } });
+}
+
 /* ---------- filtro da conciliação (desenho e edição; só o administrador salva) ---------- */
 let FC_ABERTO = '', FC_BUSCA = '', FC_PER = [];
 const fcCopia = f => JSON.parse(JSON.stringify({ analise:f.analise, remessa:f.remessa, excecoes:f.excecoes||{} }));

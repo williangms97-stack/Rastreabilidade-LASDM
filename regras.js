@@ -277,18 +277,28 @@
     });
     return r;
   }
+  /* ---------- Reserva de andar por operador (só o app usa; o painel não define reservas) ----------
+     bloqueados: andares reservados por OUTROS operadores ('prateleira-andar' → nome) — nunca sugeridos nem aceitos.
+     preferido: o andar reservado por este operador — vem primeiro na sugestão. As regras de armazenamento não mudam. */
+  let RESERVA = { bloqueados: {}, preferido: '' };
+  const definirReservas = r => { RESERVA = { bloqueados: (r && r.bloqueados) || {}, preferido: (r && r.preferido) || '' }; };
+  const chaveAndar = (p, a) => Number(p) + '-' + Number(a);
+  const textoAndar = (p, a) => 'P.' + p2(p) + ' · A.' + p2(a);
+
   /* Sugere a posição para uma amostra respeitando as regras.
      Prioridade: andar já com o mesmo perfil (continua a sequência) → andar vazio (da própria embalagem primeiro). */
-  function sugerirPosicao(amostra, embalagem, est, prateleiras, excetoProt) {
+  function sugerirPosicao(amostra, embalagem, est, prateleiras, excetoProt, semReserva) {
+    const blq = semReserva ? {} : RESERVA.bloqueados, pref = semReserva ? '' : RESERVA.preferido;
     const pulos = (est && est._pulos) || {};
     const ests = Object.assign({}, est); if (excetoProt) delete ests[excetoProt];
     const cel = celulasOcupadas(ests), pp = perfisPrateleiras(ests, prateleiras);
     // andares que aceitam esta embalagem: os da própria embalagem primeiro, depois os livres, depois (0,5 kg) os de 1 kg
     const cands = [];
     (prateleiras || []).filter(p => p.situacao !== 'Inativa').forEach(pr => { for (let a = 1; a <= ANDARES; a++) {
+      if (blq[chaveAndar(pr.numero, a)]) continue;
       const ea = embAndar(pr, a, ests); if (ea && !cabeNa(embalagem, ea)) continue; cands.push({ pr, a, ea }); } });
-    const rank = c => c.ea === embalagem ? 0 : c.ea === '' ? 1 : 2;
-    cands.sort((x, y) => rank(x) - rank(y) || x.pr.numero - y.pr.numero || x.a - y.a);
+    const rank = c => c.ea === embalagem ? 0 : c.ea === '' ? 1 : 2, meu = c => chaveAndar(c.pr.numero, c.a) === pref ? 0 : 1;
+    cands.sort((x, y) => meu(x) - meu(y) || rank(x) - rank(y) || x.pr.numero - y.pr.numero || x.a - y.a);
     const livre = c => { const k = c.ea || embalagem, emb = gradePara(embalagem, k);
       // se o operador pulou endereços neste andar (e o andar tem amostras), a sugestão segue a partir do pulo; os pulados só voltam quando o resto do andar encher
       const pl = pulos[c.pr.numero + '-' + c.a], ini = pl && perfilAndar(c) ? pl.ordem : -1;
@@ -298,12 +308,21 @@
     const obs = c => c.ea === '' ? ' (andar livre: passa a ser de ' + (embalagem === 'KRAFT' ? nomeEmb('KRAFT') : 'caixinhas — 1 kg e 0,5 kg') + ')'
       : c.ea !== embalagem && ehCaixinha(c.ea) && andaresDe(c.pr)[c.a - 1] ? ' (' + nomeEmb(embalagem).toLowerCase() + ' em andar de ' + nomeEmb(c.ea).toLowerCase() + ')' : '';
     const perfilAndar = c => { const x = pp[c.pr.numero]; return x && x.andares[c.a] ? x.andares[c.a].perfil : null; };
+    // 0º: o andar reservado por este operador, se aceita a amostra (mesmo perfil, ou vazio)
+    const cm = pref && cands.find(c => chaveAndar(c.pr.numero, c.a) === pref);
+    if (cm) { const pa = perfilAndar(cm);
+      if (!pa || chavePerfil(pa) === chavePerfil(perfil(amostra, cm.ea || embalagem))) { const s = livre(cm);
+        if (s) return { slot: s, embPrat: cm.ea || embalagem, motivo: (pa ? 'Continua a sequência do seu andar ' : 'Seu andar ') + textoAndar(cm.pr.numero, cm.a) + (pa ? '' : ' (vazio: passa a ser deste perfil)') + obs(cm) }; } }
     // 1º: andar que já tem o mesmo perfil (continua a sequência)
     for (const c of cands) { const pa = perfilAndar(c);
       if (pa && chavePerfil(pa) === chavePerfil(perfil(amostra, c.ea || embalagem))) { const s = livre(c); if (s) return { slot: s, embPrat: c.ea || embalagem, motivo: 'Continua a sequência do andar A.' + p2(c.a) + ' da prateleira ' + p2(c.pr.numero) + obs(c) }; } }
     // 2º: andar vazio (passa a ser deste perfil)
     for (const c of cands) { if (perfilAndar(c)) continue;
       const s = livre(c); if (s) return { slot: s, embPrat: c.ea || embalagem, motivo: 'Andar A.' + p2(c.a) + ' da prateleira ' + p2(c.pr.numero) + ' livre (passa a ser deste perfil)' + obs(c) }; }
+    // sem posição: se o andar desta amostra está reservado por outro operador, diz quem está com ele
+    if (Object.keys(blq).length) { const sr = sugerirPosicao(amostra, embalagem, est, prateleiras, excetoProt, true);
+      if (sr.slot && blq[chaveAndar(sr.slot.prateleira, sr.slot.andar)]) return { slot: null, emUso: blq[chaveAndar(sr.slot.prateleira, sr.slot.andar)],
+        motivo: 'O andar desta amostra (' + textoAndar(sr.slot.prateleira, sr.slot.andar) + ') está em uso por ' + blq[chaveAndar(sr.slot.prateleira, sr.slot.andar)] + ' e não há outro andar livre para este perfil. Separe a amostra para ' + blq[chaveAndar(sr.slot.prateleira, sr.slot.andar)] + '.' }; }
     return { slot: null, motivo: cands.length ? 'Nenhum andar de ' + nomeEmbAceitas(embalagem) + ' livre para este perfil. Cadastre uma nova prateleira (ou um andar desta embalagem).' : 'Nenhum andar de ' + nomeEmbAceitas(embalagem) + ' cadastrado.' };
   }
   // endereços livres do mesmo andar que ficam para trás ao emblocar em "slot" (desde o último pulo, se houver)
@@ -333,6 +352,8 @@
     if (!pr) return ['Prateleira ' + slot.prateleira + ' não cadastrada.'];
     if (pr.situacao === 'Inativa') return ['Prateleira ' + p2(pr.numero) + ' está inativa.'];
     if (!(slot.andar >= 1 && slot.andar <= ANDARES)) return ['Posição fora da capacidade da prateleira.'];
+    const quemUsa = RESERVA.bloqueados[chaveAndar(pr.numero, slot.andar)];
+    if (quemUsa) return ['O andar ' + textoAndar(pr.numero, slot.andar) + ' está em uso por ' + quemUsa + '.'];
     const ests = Object.assign({}, est); if (excetoProt) delete ests[excetoProt];
     const ea = embAndar(pr, slot.andar, ests);
     if (ea && !cabeNa(embalagem, ea)) return ['O andar A.' + p2(slot.andar) + ' da prateleira ' + p2(pr.numero) + ' é de ' + nomeEmb(ea) + '.'];
@@ -601,10 +622,10 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.11.03a',
+    VERSAO_REGRAS: '2026.11.03b',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
-    EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, ehCaixinha, gradePara, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
+    EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, ehCaixinha, gradePara, definirReservas, chaveAndar, textoAndar, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, foraDaRegra, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
     ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };

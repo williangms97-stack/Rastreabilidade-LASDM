@@ -27,17 +27,19 @@
     const resp = t => new Response(t, { status:200, headers:{ 'Content-Type':'application/json' } });
     if(opts && String(opts.method || '').toUpperCase() === 'POST'){
       const d = JSON.parse(opts.body || '{}');
+      if(d.acao === 'filtro') return resp(await rpc('api_filtro', { d }));
       for(const m of (d.movimentos || [])){ if(m.foto){ try{ m.fotoUrl = await subirFoto(m); }catch(e){ m.fotoUrl = 'Erro ao salvar foto: ' + e.message; } delete m.foto; } }
       return resp(await rpc('api_post', { d }));
     }
     const p = Object.fromEntries(new URLSearchParams(url.split('?')[1] || ''));   // (o painel tem uma variável chamada URL)
+    if(p.acao === 'filtro') return resp(await rpc('api_filtro', { d:{ op:'ler' } }));
     return resp(await rpc('api_get', { p }));
   };
 })();
 </script>
-<script src="regras.js?v=2026.10.30c"></script>
+<script src="regras.js?v=2026.11.03a"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.10.30c'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.11.03a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -128,6 +130,22 @@ h2{margin:0;font-size:18px}
 .ckp{grid-template-columns:repeat(4,minmax(0,1fr));margin:4px 0 6px}@media (max-width:700px){.ckp{grid-template-columns:repeat(2,minmax(0,1fr))}}.ckp .kpi{cursor:default}
 .fbar label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .fbar input,.fbar select{height:40px;border:1.5px solid var(--line);border-radius:8px;padding:0 10px;background:var(--surface);min-width:140px;text-transform:none;letter-spacing:0;font-weight:500;color:var(--ink)}
+.fgrid{align-items:start}
+.fcfrozen{display:flex;gap:10px;align-items:flex-start;background:var(--ok-bg);border:1px solid rgba(31,122,92,.3);border-radius:10px;padding:10px 12px;font-size:13px;margin:10px 0 4px}
+.fcfrozen.pend{background:var(--warn-bg);border-color:var(--warn)}
+.fch3{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:14px 0 6px;font-weight:700}
+.fcopt{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:5px;font-size:14px;background:var(--surface);width:100%;text-align:left;font:inherit;color:inherit}
+.fcopt .n{margin-left:auto;font-family:var(--f-code);font-size:13px;color:var(--muted)}
+.fcopt .exp{border:0;background:none;cursor:pointer;font-size:13px;color:var(--muted);padding:2px 4px}
+.fcsw{width:34px;height:19px;border-radius:10px;background:#cfd8d2;position:relative;flex:none;border:0;cursor:pointer;padding:0}.fcsw:after{content:'';position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:left .15s}
+.fcsw[aria-pressed=true]{background:#1f7a5c}.fcsw[aria-pressed=true]:after{left:17px}.fcsw:disabled{cursor:default;opacity:.75}
+.fcexp{background:var(--bg);border:1px solid var(--line);border-radius:8px;margin:-2px 0 6px 26px;padding:10px}
+.fcexp input[type=search]{width:100%;margin-bottom:8px}
+.fcpr{display:flex;align-items:center;gap:9px;font-size:13px;padding:3px 2px}.fcpr .mono{font-family:var(--f-code)}.fcpr .d{color:var(--muted);font-size:12px}
+.fcnote{font-size:12px;color:var(--warn);background:var(--warn-bg);border-radius:8px;padding:8px 10px;margin-top:10px}
+.fcbtns{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:flex-end}
+.fchist{font-size:13px;line-height:1.6;max-height:520px;overflow:auto}.fchist div{padding:6px 0;border-bottom:1px solid var(--hair)}
+.lnk{color:var(--accent);font-weight:700}
 .btn{height:40px;border:0;border-radius:8px;padding:0 16px;font-weight:700;background:var(--accent);color:#fff;cursor:pointer}
 .btn.sec{background:var(--frost);color:var(--ink)} .btn:disabled{opacity:.5}
 .tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
@@ -299,8 +317,12 @@ tbody tr:hover{background:#f7fbf9}
 
   <!-- CONCILIAÇÃO -->
   <section class="pagina" id="conciliacao" hidden>
+    <div class="g2 fgrid" style="margin-bottom:18px">
+      <div class="card" id="fcCard"><div><h2>O que entra na conta da conciliação</h2><div class="sub">Ligado = a amostra deveria estar no arquivo e entra na conta. Desligado = fica fora da conta. Vale para esta aba e para o quadro da Visão geral. Só muda a contagem: o app continua aceitando qualquer amostra.</div></div><div id="fcBox"></div></div>
+      <div class="card"><div><h2>Histórico do filtro</h2><div class="sub">Cada alteração salva fica registrada.</div></div><div id="fcHist" class="fchist"></div></div>
+    </div>
     <div class="card">
-      <div><h2>Recebidas × registradas no arquivo</h2><div class="sub">Compara as amostras recebidas (planilhas do sistema e manual) com as bipadas no app. Protocolos e amostras manuais (M) que ficam no arquivo (sem Cargas classificação, Secador, Carregamentos, Pré-lote e Pré-colheita).</div></div>
+      <div><h2>Recebidas × registradas no arquivo</h2><div class="sub">Compara as amostras recebidas (planilhas do sistema e manual) com as bipadas no app. Entram na conta as que o filtro "O que entra na conta" marca como devendo estar no arquivo.</div></div>
       <div class="fbar"><label>Período<select id="cPer"><option value="ano">Ano todo (desde 01/01)</option><option value="120">Últimos 120 dias</option><option value="30">Últimos 30 dias</option><option value="livre">Escolher datas</option></select></label><label>Recebidas de<input type="date" id="cDe"></label><label>até<input type="date" id="cAte"></label>
         <label>Situação<select id="cSit"><option value="falta">Recebidas e não registradas</option><option value="ok">Registradas</option><option value="semref">Registradas sem referência</option><option value="todas">Todas recebidas</option></select></label></div>
       <div id="concDet"></div>
@@ -359,7 +381,7 @@ tbody tr:hover{background:#f7fbf9}
     <label>Senha<input type="password" id="lgSenha" autocomplete="current-password"></label>
     <div id="lgMsg"></div>
     <button class="btn" type="submit" id="lgBtn">Entrar</button>
-    <div class="small" id="lgVersao" style="text-align:center;margin-top:10px;opacity:.75"></div>
+    <div class="sub" id="lgVersao" style="text-align:center;margin-top:10px;opacity:.75"></div>
   </form>
 </div>
 <div class="tip" id="tip" hidden></div>
@@ -382,7 +404,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.10.30c' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.10.30c' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.11.03a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.03a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -424,10 +446,20 @@ let DADOS = null, EST = {}, MOVS = [], REF = [], REFMAP = new Map(), ultimo = 0,
 // referência: o ano todo, baixada uma vez ao abrir; depois só as amostras novas a cada 15 min
 const REF_DESDE = new Date().getFullYear() + '-01-01', REF_INTERVALO = 15*60000;
 let refEm = 0;
-// tipos de remessa que não ficam no arquivo (não entram na conta de "para emblocar"; o app continua aceitando)
-const NAO_CONTA = { CARREG:'Carregamentos', PRELOTE:'Pré-lote', PRECOLHEITA:'Pré-colheita' };
-// a remessa decide se conta (um Carregamento tratado vai para o TSI se for emblocado, mas continua fora da contagem)
-const contaNoArquivo = r => { const c = L.classificar(r); return c.armazena && !NAO_CONTA[c.grupo] && !NAO_CONTA[L.REMESSA_GRUPO[L.up(r.remessa)]]; };
+/* ---------- filtro da conciliação: o que entra na conta ("deveria estar no arquivo") ----------
+   Escolhido pelo administrador por tipo de análise, tipo de remessa e exceções por protocolo; fica salvo no banco
+   ("congelado") e vale para todos até uma nova alteração. Só muda a contagem: o app continua aceitando tudo. */
+const FA_ANALISES = [['PREV','Análise prévia (CQI)'],['DEF','Análise definitiva'],['INTER','Inter / Intralaboratorial']];
+const FA_REMESSAS = L.TIPOS_REMESSA.map(t=>[L.up(t), t]).concat([['OUTRAS','Outras / sem remessa'],['MANUAL','Amostras manuais']]);
+const FILTRO_PADRAO = { analise:{ PREV:true, DEF:true, INTER:true },
+  remessa:Object.fromEntries(FA_REMESSAS.map(([k])=>[k, ['CARGAS CLASSIFICACAO','SECADOR','CARREGAMENTOS','PRE LOTE','PRE COLHEITA'].indexOf(k) < 0])), excecoes:{} };
+let FILTRO = null, FILTRO_HIST = [], FILTRO_ERRO = '', RASC = null;   // RASC = alterações ainda não salvas (só nesta tela)
+const filtroAtivo = () => RASC || FILTRO || FILTRO_PADRAO;
+const ehManualRef = r => L.ehManual(r.prot) || L.classificar(Object.assign({ protocolo:r.prot }, r)).classificacao !== 'Protocolo';
+const faRem = r => { if(ehManualRef(r)) return 'MANUAL'; const k = L.up(r.remessa); return FA_REMESSAS.some(x=>x[0]===k) ? k : 'OUTRAS'; };
+const faAn = r => { const t = L.up(r.tipoAnalise); return /INTER|INTRA/.test(t) ? 'INTER' : /DEFINITIVA/.test(t) ? 'DEF' : 'PREV'; };
+const contaPeloGrupo = (r, f) => { const rem = faRem(r); if(f.remessa[rem] === false) return false; return rem === 'MANUAL' || f.analise[faAn(r)] !== false; };
+const contaNoArquivo = (r, f) => { f = f || filtroAtivo(); const ex = f.excecoes && f.excecoes[r.prot]; return ex === true || ex === false ? ex : contaPeloGrupo(r, f); };
 let enviandoRef = false;
 async function carregar(){
   if(carregando || enviandoRef || !URL) return; carregando = true;
@@ -436,7 +468,9 @@ async function carregar(){
     const desde = Date.now() - 60*86400000;
     const total = !refEm, buscaRef = total || Date.now() - refEm > REF_INTERVALO;
     let dRef = REF_DESDE; if(!total){ const m = REF.reduce((x,r)=>{ const k = L.dataRefKey(r.data)||''; return k > x ? k : x; }, REF_DESDE), d = new Date(m+'T12:00'); d.setDate(d.getDate()-3); dRef = dkey(d) < REF_DESDE ? REF_DESDE : dkey(d); }
-    const [j, r] = await Promise.all([ get('?acao=dados&desde=' + desde), buscaRef ? get('?acao=ref&desde=' + dRef) : null ]);
+    const [j, r, fl] = await Promise.all([ get('?acao=dados&desde=' + desde), buscaRef ? get('?acao=ref&desde=' + dRef) : null,
+      get('?acao=filtro').catch(e=>({ ok:false, erro:e.message })) ]);
+    if(fl && fl.ok){ FILTRO = fl.filtro && fl.filtro.remessa ? fl.filtro : null; FILTRO_HIST = fl.historico || []; FILTRO_ERRO = ''; } else FILTRO_ERRO = (fl && fl.erro) || 'indisponível';
     DADOS = j;
     if(r){ if(total) REFMAP = new Map(); (r.ref||[]).forEach(x=>REFMAP.set(x.prot, x)); REF = [...REFMAP.values()]; refEm = Date.now(); }
     MOVS = (j.movimentos||[]).map(m=>Object.assign(m, { ts:Number(m.ts)||0 }));
@@ -495,7 +529,7 @@ function render(){
   renderMovimentos();
   renderRefStatus();
   renderCadastro();
-  $('#rodape').textContent = `Painel versão 2026.10.30c · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
+  $('#rodape').textContent = `Painel versão 2026.11.03a · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -596,21 +630,24 @@ function renderConciliacao(resumo){
   if(!$('#cDe').value) $('#cDe').value = REF_DESDE; if(!$('#cAte').value) $('#cAte').value = dkey(new Date());
   const de = $('#cDe').value, ate = $('#cAte').value;
   const noPeriodo = REF.filter(r=>{ const k = L.dataRefKey(r.data); return k && k>=de && k<=ate; });
-  const recebidas = noPeriodo.filter(contaNoArquivo), naoFicam = noPeriodo.length - recebidas.length;
+  const recebidas = noPeriodo.filter(r=>contaNoArquivo(r)), naoFicam = noPeriodo.length - recebidas.length;
   const reg = r => !!EST[r.prot];
   const ok = recebidas.filter(reg), falta = recebidas.filter(r=>!reg(r));
   const semref = Object.values(EST).filter(e=>!REFMAP.has(e.protocolo));
-  const pct = recebidas.length ? Math.round(ok.length/recebidas.length*100) : 0;
-  $('#concSub').textContent = `Recebidas de ${brk(de)} a ${brk(ate)} · protocolos e amostras manuais que ficam no arquivo (${naoFicam.toLocaleString('pt-BR')} de Cargas classificação, Secador, Carregamentos, Pré-lote e Pré-colheita não entram na conta)`;
-  $('#concResumo').innerHTML = `<div class="bars"><div class="brow" data-ir="conciliacao"><span class="lbl">Registradas no app</span><span class="track"><i style="width:${pct}%;background:#1f7a5c"></i></span><span class="v">${ok.length} de ${recebidas.length} (${pct}%)</span></div>
-    <div class="brow" data-ir="conciliacao"><span class="lbl">Para emblocar (recebidas e não registradas)</span><span class="track"><i style="width:${recebidas.length?falta.length/recebidas.length*100:0}%;background:#d9892b"></i></span><span class="v">${falta.length}</span></div>
+  const fSalvo = FILTRO || FILTRO_PADRAO, contaSalvo = noPeriodo.filter(r=>contaNoArquivo(r, fSalvo));
+  const okS = contaSalvo.filter(reg), faltaS = contaSalvo.length - okS.length;   // a Visão geral mostra sempre o filtro congelado (não a prévia não salva)
+  const pct = contaSalvo.length ? Math.round(okS.length/contaSalvo.length*100) : 0;
+  $('#concSub').innerHTML = `Recebidas de ${brk(de)} a ${brk(ate)} · conforme o filtro ${FILTRO ? 'congelado em '+esc(FILTRO.em||'')+' por '+esc(FILTRO.por||'') : 'padrão'} (${(noPeriodo.length-contaSalvo.length).toLocaleString('pt-BR')} fora da conta) · <a href="#conciliacao" class="lnk" data-ir="conciliacao">Editar filtro</a>`;
+  $('#concResumo').innerHTML = `<div class="bars"><div class="brow" data-ir="conciliacao"><span class="lbl">Registradas no app</span><span class="track"><i style="width:${pct}%;background:#1f7a5c"></i></span><span class="v">${okS.length} de ${contaSalvo.length} (${pct}%)</span></div>
+    <div class="brow" data-ir="conciliacao"><span class="lbl">Para emblocar (recebidas e não registradas)</span><span class="track"><i style="width:${contaSalvo.length?faltaS/contaSalvo.length*100:0}%;background:#d9892b"></i></span><span class="v">${faltaS}</span></div>
     <div class="brow" data-ir="conciliacao"><span class="lbl">Registradas sem referência</span><span class="track"><i style="width:${Math.min(100,semref.length)}%;background:#b3261e"></i></span><span class="v">${semref.length}</span></div></div>
     ${REF.length?'':'<div class="alert warn">Nenhuma planilha de referência enviada ainda. Use a aba "Planilhas de referência".</div>'}`;
   if(resumo && !location.hash.includes('conciliacao')) return;
   const sit = $('#cSit').value;
   const n = v => v.toLocaleString('pt-BR');
-  $('#concDet').innerHTML = `<div class="kpis ckp"><div class="kpi"><div class="n">${n(noPeriodo.length)}</div><div class="t">Recebidas no período</div></div><div class="kpi"><div class="n">${n(naoFicam)}</div><div class="t">Não ficam no arquivo</div></div><div class="kpi warn"><div class="n">${n(falta.length)}</div><div class="t">Para emblocar</div></div><div class="kpi"><div class="n">${n(ok.length)}</div><div class="t">Registradas no app (${pct}%)</div></div></div>
-    <div class="sub">Não ficam no arquivo: Cargas classificação, Secador, ${Object.values(NAO_CONTA).join(', ')}. ${semref.length ? n(semref.length)+' registradas sem referência.' : ''}</div>`;
+  $('#concDet').innerHTML = `<div class="kpis ckp"><div class="kpi"><div class="n">${n(noPeriodo.length)}</div><div class="t">Recebidas no período</div></div><div class="kpi"><div class="n">${n(naoFicam)}</div><div class="t">Fora da conta</div></div><div class="kpi warn"><div class="n">${n(falta.length)}</div><div class="t">Para emblocar</div></div><div class="kpi"><div class="n">${n(ok.length)}</div><div class="t">Registradas no app (${recebidas.length?Math.round(ok.length/recebidas.length*100):0}%)</div></div></div>
+    <div class="sub">${RASC ? '<b style="color:var(--warn)">Prévia com alterações não salvas no filtro.</b> ' : ''}O que fica fora da conta segue o filtro "O que entra na conta" acima. ${semref.length ? n(semref.length)+' registradas sem referência.' : ''}</div>`;
+  renderFiltro(noPeriodo);
   if(sit==='semref') return tabela('tbConc', [
       { k:'protocolo', t:'Protocolo', cls:'mono', h:e=>esc(e.protocolo) }, { k:'cultivar', t:'Cultivar (digitada)', h:e=>esc(e.cultivar||'') }, { k:'remessa', t:'Remessa', h:e=>esc(e.remessa||'') },
       { k:'local', t:'Onde está', h:e=>esc(e.local) }, { k:'usuario', t:'Por', h:e=>esc(e.usuario||'') } ], semref, 'Nenhuma.', ['protocolo', 1]);
@@ -623,6 +660,75 @@ function renderConciliacao(resumo){
     { k:'tratamento', t:'Tratamento', h:r=>esc(r.tratamento||'—') }, { k:'produtor', t:'Produtor', h:r=>esc(r.produtor) },
     { k:'st', t:'No app', v:r=>EST[r.prot]?EST[r.prot].local:'', h:r=>EST[r.prot] ? `<span class="pill ok">${esc(EST[r.prot].local)}</span>` : '<span class="pill warn">não registrada</span>' },
     { k:'origem', t:'Planilha', h:r=>esc(r.origem||'') } ], lista, 'Nada neste filtro.', ['prot', 1]);
+}
+/* ---------- filtro da conciliação (desenho e edição; só o administrador salva) ---------- */
+let FC_ABERTO = '', FC_BUSCA = '', FC_PER = [];
+const fcCopia = f => JSON.parse(JSON.stringify({ analise:f.analise, remessa:f.remessa, excecoes:f.excecoes||{} }));
+const fcAdmin = () => !!(SESSAO && SESSAO.perfil==='Administrador');
+const fcNomeRem = k => (FA_REMESSAS.find(x=>x[0]===k)||[k,k])[1];
+const fcNomeAn = k => (FA_ANALISES.find(x=>x[0]===k)||[k,k])[1];
+function fcResumo(de, para){
+  const m = [];
+  FA_ANALISES.forEach(([k,n])=>{ if((de.analise[k]!==false) !== (para.analise[k]!==false)) m.push(n + (para.analise[k]!==false ? ' entra' : ' fora')); });
+  FA_REMESSAS.forEach(([k,n])=>{ if((de.remessa[k]!==false) !== (para.remessa[k]!==false)) m.push(n + (para.remessa[k]!==false ? ' entra' : ' fora')); });
+  const ea = de.excecoes||{}, ep = para.excecoes||{}, ent = [], sai = [], tir = [];
+  new Set(Object.keys(ea).concat(Object.keys(ep))).forEach(p=>{ if(ea[p]===ep[p]) return; if(ep[p]===true) ent.push(p); else if(ep[p]===false) sai.push(p); else tir.push(p); });
+  const lp = l => l.slice(0,6).join(', ') + (l.length>6 ? ' e mais ' + (l.length-6) : '');
+  if(ent.length) m.push('entram por exceção: ' + lp(ent)); if(sai.length) m.push('ficam fora por exceção: ' + lp(sai)); if(tir.length) m.push('exceção retirada: ' + lp(tir));
+  return m.join('; ') || 'sem mudanças';
+}
+function fcMexer(fn){ if(!fcAdmin()) return; RASC = RASC || fcCopia(filtroAtivo()); fn(RASC); if(JSON.stringify(fcCopia(RASC))===JSON.stringify(fcCopia(FILTRO||FILTRO_PADRAO))) RASC = null; renderConciliacao(false); }
+function fcLista(key){
+  const box = document.getElementById('fcL_'+key); if(!box) return;
+  const f = filtroAtivo(), q = FC_BUSCA.replace(/\D/g,''), todos = FC_PER.filter(r=>faRem(r)===key);
+  const sel = (q ? todos.filter(r=>r.prot.replace(/\D/g,'').indexOf(q)>=0) : todos).slice().sort((a,b)=>{ const ea = f.excecoes[a.prot]!==undefined, eb = f.excecoes[b.prot]!==undefined; return (eb-ea) || (L.protAno(a.prot)*1e7+L.protNum(a.prot)) - (L.protAno(b.prot)*1e7+L.protNum(b.prot)); });
+  const ed = fcAdmin();
+  box.innerHTML = sel.slice(0,80).map(r=>{ const c = contaNoArquivo(r, f), ex = f.excecoes[r.prot]!==undefined;
+    return `<label class="fcpr"><input type="checkbox" data-fp="${esc(r.prot)}" ${c?'checked':''} ${ed?'':'disabled'}><span class="mono">${esc(r.prot)}</span><span class="d">· ${esc([r.especie, r.data, r.tratamento && r.tratamento!=='-O-' ? r.tratamento : ''].filter(Boolean).join(' · '))} — ${c?'entra na conta':'fora'}${ex?' (exceção)':''}</span></label>`; }).join('')
+    + (sel.length>80 ? `<div class="fcpr sub">… mais ${n(sel.length-80)} protocolos · busque pelo número</div>` : '') + (sel.length ? '' : '<div class="fcpr sub">Nenhum protocolo no período.</div>');
+  box.querySelectorAll('[data-fp]').forEach(cb=>cb.onchange = ()=>{ const r = FC_PER.find(x=>x.prot===cb.dataset.fp); fcMexer(F=>{ const v = cb.checked; if(v===contaPeloGrupo(r, F)) delete F.excecoes[r.prot]; else F.excecoes[r.prot] = v; }); });
+}
+const n = v => Number(v).toLocaleString('pt-BR');
+function renderFiltro(noPeriodo){
+  FC_PER = noPeriodo;
+  const f = filtroAtivo(), ed = fcAdmin(), box = $('#fcBox'); if(!box) return;
+  const cAn = {}, cRem = {}, cEx = {};
+  noPeriodo.forEach(r=>{ const rem = faRem(r); cRem[rem] = (cRem[rem]||0)+1; if(rem!=='MANUAL'){ const a = faAn(r); cAn[a] = (cAn[a]||0)+1; } if(f.excecoes[r.prot]!==undefined) cEx[rem] = (cEx[rem]||0)+1; });
+  const sw = (on, attr) => `<button class="fcsw" aria-pressed="${on}" ${attr} ${ed?'':'disabled'} title="${on?'Entra na conta':'Fora da conta'}"></button>`;
+  const est = RASC ? `<div class="fcfrozen pend"><span>✎</span><div><b>Alterações não salvas</b> — os números desta aba já mostram a prévia, só nesta tela. Ninguém mais vê até você tocar em <b>Salvar e congelar</b>.</div></div>`
+    : FILTRO ? `<div class="fcfrozen"><span>🔒</span><div><b>Filtro congelado</b> — salvo por <b>${esc(FILTRO.por||'')}</b> em ${esc(FILTRO.em||'')}. Vale para todos os computadores até um administrador salvar uma nova alteração.</div></div>`
+    : `<div class="fcfrozen"><span>🔒</span><div><b>Filtro padrão</b> — fora da conta: Cargas classificação, Secador, Carregamentos, Pré-lote e Pré-colheita. Ainda não foi alterado.</div></div>`;
+  const aviso = FILTRO_ERRO && ed ? `<div class="alert warn" style="margin-top:8px">O banco ainda não tem a função do filtro (rode o arquivo <b>supabase/03_filtro_conciliacao.sql</b> no SQL Editor do Supabase). Até lá vale o filtro padrão e não é possível salvar.</div>` : '';
+  box.innerHTML = est + aviso + (ed ? '' : '<div class="sub" style="margin-top:6px">Só o administrador altera este filtro.</div>')
+    + `<div class="fch3">Tipo de análise</div>` + FA_ANALISES.map(([k,nm])=>`<div class="fcopt">${sw(f.analise[k]!==false, `data-fa="${k}"`)}${esc(nm)}<span class="n">${n(cAn[k]||0)}</span></div>`).join('')
+    + `<div class="fch3">Tipo de remessa</div>` + FA_REMESSAS.map(([k,nm])=>{ const ab = FC_ABERTO===k;
+        return `<div class="fcopt" ${ab?'style="border-color:var(--accent)"':''}>${sw(f.remessa[k]!==false, `data-fr="${esc(k)}"`)}${esc(nm)}${cEx[k]?` <span class="pill ${f.remessa[k]!==false?'warn':'ok'}">${cEx[k]} ${cEx[k]===1?'exceção':'exceções'}</span>`:''}<span class="n">${n(cRem[k]||0)}</span><button class="exp" data-fx="${esc(k)}" title="Escolher por protocolo">${ab?'▾':'▸'}</button></div>`
+          + (ab ? `<div class="fcexp"><input type="search" id="fcBusca" placeholder="Buscar protocolo dentro de ${esc(nm)} (ex.: 15230)" value="${esc(FC_BUSCA)}"><div id="fcL_${esc(k)}"></div></div>` : ''); }).join('')
+    + `<div class="fcnote">A amostra entra na conta só se o tipo de análise <b>e</b> o tipo de remessa estiverem ligados (amostras manuais seguem só o seu botão). A exceção por protocolo vale acima dos dois: marcado = entra; desmarcado = fica fora.</div>`
+    + (ed ? `<div class="fcbtns"><button class="btn" id="fcSalvar" ${RASC && !FILTRO_ERRO?'':'disabled'}>Salvar e congelar</button><button class="btn ghost" id="fcDesc" ${RASC?'':'disabled'}>Descartar alterações</button><button class="btn ghost" id="fcPad">Voltar ao padrão</button>
+        ${ADM ? '' : '<label style="display:flex;flex-direction:column;font-size:12px;color:var(--muted)">Sua senha de administrador<input type="password" id="fcSenha" autocomplete="current-password" style="height:40px"></label>'}</div><div id="fcMsg"></div>` : '');
+  $('#fcHist').innerHTML = FILTRO_HIST.length ? FILTRO_HIST.map(h=>`<div><b>${esc(h.em||'')} · ${esc(h.por||'')}</b> — ${esc(h.resumo||'')}</div>`).join('') : '<div class="sub">Nenhuma alteração salva ainda (vale o filtro padrão).</div>';
+  if(FC_ABERTO) fcLista(FC_ABERTO);
+  box.querySelectorAll('[data-fa]').forEach(b=>b.onclick = ()=>fcMexer(F=>{ F.analise[b.dataset.fa] = F.analise[b.dataset.fa]===false; }));
+  box.querySelectorAll('[data-fr]').forEach(b=>b.onclick = ()=>fcMexer(F=>{ const k = b.dataset.fr; F.remessa[k] = F.remessa[k]===false;
+    // ao ligar/desligar o grupo, exceções que ficariam iguais ao grupo deixam de ser exceção
+    FC_PER.filter(r=>faRem(r)===k && F.excecoes[r.prot]!==undefined && F.excecoes[r.prot]===contaPeloGrupo(r, F)).forEach(r=>delete F.excecoes[r.prot]); }));
+  box.querySelectorAll('[data-fx]').forEach(b=>b.onclick = ()=>{ FC_ABERTO = FC_ABERTO===b.dataset.fx ? '' : b.dataset.fx; FC_BUSCA = ''; renderFiltro(FC_PER); });
+  const bu = $('#fcBusca'); if(bu) bu.oninput = ()=>{ FC_BUSCA = bu.value; fcLista(FC_ABERTO); };
+  if(!ed) return;
+  $('#fcDesc').onclick = ()=>{ RASC = null; renderConciliacao(false); };
+  $('#fcPad').onclick = ()=>fcMexer(F=>{ const p = fcCopia(FILTRO_PADRAO); F.analise = p.analise; F.remessa = p.remessa; F.excecoes = {}; });
+  $('#fcSalvar').onclick = async ()=>{
+    const msg = t => $('#fcMsg').innerHTML = t;
+    const adm = ADM || { usuario:SESSAO.usuario, senha:($('#fcSenha')||{}).value||'' };
+    if(!adm.senha){ msg('<div class="alert warn" style="margin-top:8px">Digite sua senha de administrador para salvar.</div>'); return; }
+    const resumo = fcResumo(FILTRO||FILTRO_PADRAO, RASC);
+    $('#fcSalvar').disabled = true; msg('<div class="sub" style="margin-top:8px">Salvando…</div>');
+    try{ const j = await post({ acao:'filtro', op:'salvar', admin:adm, filtro:fcCopia(RASC), resumo });
+      FILTRO = j.filtro; FILTRO_HIST = j.historico||[]; RASC = null; ADM = adm; renderConciliacao(false); renderConciliacao(true);
+      $('#fcMsg').innerHTML = '<div class="alert ok" style="margin-top:8px">Filtro salvo e congelado. Já vale para todos.</div>';
+    }catch(err){ $('#fcSalvar').disabled = false; msg(`<div class="alert bad" style="margin-top:8px">${esc(err.message)}</div>`); }
+  };
 }
 $('#cPer').addEventListener('change', ()=>{ const v = $('#cPer').value; if(v==='livre') return; const d = new Date(); if(v!=='ano') d.setDate(d.getDate()-Number(v)); $('#cDe').value = v==='ano' ? REF_DESDE : dkey(d); $('#cAte').value = dkey(new Date()); if(TAB.tbConc) TAB.tbConc.pag = 1; renderConciliacao(false); });
 ['#cDe','#cAte'].forEach(id=>$(id).addEventListener('input', ()=>{ $('#cPer').value = 'livre'; }));

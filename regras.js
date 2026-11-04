@@ -171,8 +171,8 @@
   const nomeEmbAceitas = e => ehCaixinha(e) ? 'caixinha (1 kg ou 0,5 kg)' : nomeEmb(e);
   const nomeEmb = k => k === 'MISTO' ? 'Misto' : k === '' ? 'Livre' : (EMBALAGENS[k] || {}).nome || k || '—';
   const capLinha = k => { const e = EMBALAGENS[k]; return e ? e.lados.length * e.alturas : 0; };
-  // linhas por andar: 15 por padrão nas caixinhas; algumas prateleiras só comportam 14 (definido no cadastro)
-  const LINHAS_OPCOES = { CX1: [14, 15], CX05: [14, 15] };
+  // linhas por andar: 15 por padrão nas caixinhas; algumas prateleiras comportam 14 ou 16 (definido no cadastro)
+  const LINHAS_OPCOES = { CX1: [14, 15, 16], CX05: [14, 15, 16] };
   const nLinhas = (k, lin) => { const e = EMBALAGENS[k]; return e ? (LINHAS_OPCOES[k] && Number(lin) > 0 ? Number(lin) : e.linhas) : 0; };
   /* ---------- Embalagem por ANDAR ----------
      Cada andar tem a sua embalagem (caixinha 1 kg, 0,5 kg ou saco kraft) ou é "livre" (assume a da 1ª amostra).
@@ -622,7 +622,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.11.04a',
+    VERSAO_REGRAS: '2026.11.04b',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, ehCaixinha, gradePara, definirReservas, chaveAndar, textoAndar, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

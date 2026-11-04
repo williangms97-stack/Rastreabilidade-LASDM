@@ -40,9 +40,9 @@
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.11.04a"></script>
+<script src="regras.js?v=2026.11.04b"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.11.04a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.11.04b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -337,7 +337,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.11.04a</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.11.04b</div>
     </section>
   </main>
 
@@ -1151,7 +1151,7 @@ function novaPrateleira(embIni, depois){
     <div class="row" style="align-items:center;justify-content:space-between"><h3 style="margin:0">Embalagem por andar</h3><select id="npTodos" style="flex:0 0 auto;width:auto"><option value="">Mesma para todos…</option>${OPC.map(([k,t])=>`<option value="${k||'LIVRE'}">${t}</option>`).join('')}</select></div>
     <div id="npAnd">${[4,3,2,1].map(a=>`<div class="row" style="align-items:center;margin-bottom:6px"><b style="flex:0 0 44px">A.${L.p2(a)}</b><div class="seg" data-and="${a}" style="flex:1 1 auto">${OPC.map(([k,t])=>`<button data-emb="${k}" aria-pressed="false">${t}</button>`).join('')}</div></div>`).join('')}</div>
     <div class="small"><b>Livre</b> = o andar assume a embalagem da 1ª amostra armazenada nele.</div>
-    <div id="npLinBox" class="row" style="align-items:center"><span class="small" style="flex:1 1 auto">Linhas nos andares de caixinha</span><div class="seg" id="npLin" style="flex:0 0 auto"><button data-lin="14" aria-pressed="false">14</button><button data-lin="15" aria-pressed="true">15</button></div></div>
+    <div id="npLinBox" class="row" style="align-items:center"><span class="small" style="flex:1 1 auto">Linhas nos andares de caixinha</span><div class="seg" id="npLin" style="flex:0 0 auto">${L.LINHAS_OPCOES.CX1.map(n=>`<button data-lin="${n}" aria-pressed="${n===15}">${n}</button>`).join('')}</div></div>
     <div class="small" id="npCap"></div>
     <div class="row"><button class="btn ghost" id="npCancel">Cancelar</button><button class="btn" id="npOk">Cadastrar</button></div>`);
   const pintar = () => { document.querySelectorAll('#npAnd [data-and]').forEach(sg=>{ const a = +sg.dataset.and; sg.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.emb===andares[a-1])); });
@@ -1205,7 +1205,7 @@ function verPrateleira(num, andar){
   let cells = '';
   if(E) for(let l=1; l<=E.linhas; l++){ const n = doAndar.filter(e=>e.slot.linha===l).length; cells += `<button class="lcell ${n>=capL?'cheia':n?'parcial':''}" data-l="${l}"><b>L.${L.p2(l)}</b>${n}/${capL}</button>`; }
   const OPC = [['CX1','1 kg'],['CX05','0,5 kg'],['KRAFT','Kraft'],['','Livre']];
-  const linhasOp = L.temCaixinha(p) ? [14,15] : null, linAtual = Number(p.linhas) > 0 ? Number(p.linhas) : 15;
+  const linhasOp = L.temCaixinha(p) ? L.LINHAS_OPCOES.CX1 : null, linAtual = Number(p.linhas) > 0 ? Number(p.linhas) : 15;
   sheet(`<div class="row" style="align-items:center"><h2 style="flex:2 1 auto">Prateleira ${L.p2(num)}</h2><span class="pill mut">${esc(L.nomeEmb(L.embPrat(p,EST)))}</span></div>
     <div class="small">Andar ${L.p2(andar)} · <b>${esc(ea ? L.nomeEmb(ea) : 'Livre')}</b>${!fixas[andar-1] && ea ? ' (assumida da 1ª amostra)' : ''}: <b>${esc(x.andares && x.andares[andar] && x.andares[andar].perfil ? L.textoPerfil(x.andares[andar].perfil) : 'livre (assume o perfil da 1ª amostra)')}</b></div>
     <div class="seg" id="vpA">${[1,2,3,4].map(a=>`<button data-a="${a}" aria-pressed="${a===andar}">Andar ${L.p2(a)}</button>`).join('')}</div>
@@ -1621,7 +1621,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.11.04a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.04a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.11.04b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.04b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

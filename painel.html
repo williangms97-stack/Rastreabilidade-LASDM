@@ -41,9 +41,9 @@
   };
 })();
 </script>
-<script src="regras.js?v=2026.11.04a"></script>
+<script src="regras.js?v=2026.11.04b"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.11.04a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.11.04b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -429,7 +429,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.11.04a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.04a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.11.04b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.04b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -558,7 +558,7 @@ function render(){
   renderMovimentos();
   renderRefStatus();
   renderCadastro();
-  $('#rodape').textContent = `Painel versão 2026.11.04a · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
+  $('#rodape').textContent = `Painel versão 2026.11.04b · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -1036,7 +1036,7 @@ function renderViz(){
   }
   if(mesmas) h += eixo(DA[1].linhas);
   $('#vz2d').innerHTML = h;
-  // seletor de linha: L.01 até a última linha do andar escolhido (7 no kraft, 14 ou 15 nas caixinhas); a caixinha selecionada já preenche andar e linha
+  // seletor de linha: L.01 até a última linha do andar escolhido (7 no kraft, 14, 15 ou 16 nas caixinhas); a caixinha selecionada já preenche andar e linha
   { const se = VZ.sel && occ[VZ.sel]; if(se) $('#impAndar').value = se.slot.andar; montarImpLin(se ? se.slot.linha : null); }
   $('#impMsg').textContent = '';
   const s = VZ.sel && occ[VZ.sel]; $('#vzInfo').innerHTML = s ? tipAm(s, p).replace(/<br>/g,' · ') : '<span class="sub">Passe o mouse ou clique numa posição.</span>';
@@ -1312,7 +1312,7 @@ function formPrat(){
       <select id="cpTodos" style="height:34px;border:1.5px solid var(--line);border-radius:8px"><option value="">Mesma para todos…</option>${OPC_EMB.map(([k,t])=>`<option value="${k||'LIVRE'}">${t}</option>`).join('')}</select></div>
     ${[4,3,2,1].map(a=>`<div class="cpand"><b>A.${L.p2(a)}</b><div class="segc" data-cpa="${a}">${OPC_EMB.map(([k,t])=>`<button type="button" data-emb="${k}" aria-pressed="${CP.andares[a-1]===k}" ${usados[a-1]&&CP.andares[a-1]!==k?'disabled title="Andar com amostras: esvazie para mudar"':''}>${t}</button>`).join('')}</div></div>`).join('')}
     <div class="sub">Livre = o andar assume a embalagem da 1ª amostra.${usados.some(Boolean)?' Andares com amostras não mudam de embalagem.':''}</div>
-    <div class="cprow" ${temCx?'':'hidden'}><span class="sub" style="flex:1">Linhas nos andares de caixinha</span><div class="segc" id="cpLin" style="width:110px">${[14,15].map(n=>`<button type="button" data-lin="${n}" aria-pressed="${CP.lin===n}">${n}</button>`).join('')}</div></div>
+    <div class="cprow" ${temCx?'':'hidden'}><span class="sub" style="flex:1">Linhas nos andares de caixinha</span><div class="segc" id="cpLin" style="width:160px">${L.LINHAS_OPCOES.CX1.map(n=>`<button type="button" data-lin="${n}" aria-pressed="${CP.lin===n}">${n}</button>`).join('')}</div></div>
     <label>Observação<input type="text" id="cpObs" value="${esc(obsAtual!=null ? obsAtual : p ? p.obs||'' : '')}"></label>
     <div class="sub"><b>Capacidade:</b> ${L.capPrat(fake).toLocaleString('pt-BR')} posições${CP.andares.some(k=>!k)?' + andares livres':''}</div>
     <div id="cpMsg"></div>
@@ -1336,7 +1336,7 @@ $('#cpForm').onsubmit = e => { e.preventDefault();
   if(muda) return msg('O andar A.'+L.p2(muda)+' tem amostras: esvazie o andar para mudar a embalagem.');
   const np = Object.assign({}, p, { andares:CP.andares.join(',') });
   const fora = am.filter(e=>L.LINHAS_OPCOES[L.embAndar(np, e.slot.andar, EST)] && e.slot.linha > CP.lin);
-  if(temCx && fora.length) return msg('Há amostras na linha 15 de andar de caixinha. Remaneje-as antes de reduzir para 14 linhas.');
+  if(temCx && fora.length) return msg('Há amostras além da linha ' + L.p2(CP.lin) + ' em andar de caixinha. Remaneje-as antes de reduzir para ' + CP.lin + ' linhas.');
   salvarPratPainel(Object.assign(np, { embalagem:L.resumoEmb(CP.andares), linhas: temCx ? CP.lin : '', obs:$('#cpObs').value.trim() }));
 };
 async function salvarPratPainel(p){

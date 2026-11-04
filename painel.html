@@ -29,19 +29,21 @@
       const d = JSON.parse(opts.body || '{}');
       if(d.acao === 'filtro') return resp(await rpc('api_filtro', { d }));
       if(d.acao === 'reserva') return resp(await rpc('api_reserva', { d }));
+      if(d.acao === 'limites') return resp(await rpc('api_limites', { d }));
       for(const m of (d.movimentos || [])){ if(m.foto){ try{ m.fotoUrl = await subirFoto(m); }catch(e){ m.fotoUrl = 'Erro ao salvar foto: ' + e.message; } delete m.foto; } }
       return resp(await rpc('api_post', { d }));
     }
     const p = Object.fromEntries(new URLSearchParams(url.split('?')[1] || ''));   // (o painel tem uma variável chamada URL)
     if(p.acao === 'filtro') return resp(await rpc('api_filtro', { d:{ op:'ler' } }));
     if(p.acao === 'reserva') return resp(await rpc('api_reserva', { d:{ op:'listar' } }));
+    if(p.acao === 'limites') return resp(await rpc('api_limites', { d:{ op:'ler' } }));
     return resp(await rpc('api_get', { p }));
   };
 })();
 </script>
-<script src="regras.js?v=2026.11.03b"></script>
+<script src="regras.js?v=2026.11.04a"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.11.03b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.11.04a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -259,7 +261,7 @@ tbody tr:hover{background:#f7fbf9}
     <a class="hbtn" href="./" title="Abrir o app de bipagem">App</a>
     <button class="hbtn" id="btnSair">Sair</button>
   </div>
-  <nav class="tabs" aria-label="Seções"><a href="#cadastro">Cadastros</a><a href="#visao" class="on">Visão geral</a><a href="#arquivo">Arquivo e salas</a><a href="#conciliacao">Conciliação</a><a href="#movimentos">Movimentos</a><a href="#planilhas">Planilhas de referência</a></nav>
+  <nav class="tabs" aria-label="Seções"><a href="#cadastro">Cadastros</a><a href="#visao" class="on">Visão geral</a><a href="#arquivo">Arquivo e salas</a><a href="#tempofora">Tempo fora do arquivo</a><a href="#conciliacao">Conciliação</a><a href="#movimentos">Movimentos</a><a href="#planilhas">Planilhas de referência</a></nav>
 </header>
 
 <main id="main" hidden>
@@ -319,6 +321,26 @@ tbody tr:hover{background:#f7fbf9}
   </section>
 
   <!-- CONCILIAÇÃO -->
+  <!-- TEMPO FORA DO ARQUIVO -->
+  <section class="pagina" id="tempofora" hidden>
+    <div class="kpis" id="tfKpis"></div>
+    <div class="card" style="margin-top:18px" id="tfLimCard"><div><h2>Limites de tempo fora por sala</h2><div class="sub" id="tfLimSub">Defina quando a amostra entra em <b style="color:var(--warn)">atenção</b> e quando fica <b style="color:var(--bad)">crítica</b> em cada sala. Só o administrador altera; vale para todos até nova alteração.</div></div><div id="tfLimBox"></div></div>
+    <div class="g2" style="margin-top:18px">
+      <div class="card"><div><h2>Fora agora, por sala</h2><div class="sub">Quantas estão em cada sala e o maior tempo · <span style="color:var(--bad)">■</span> crítico <span style="color:#d9892b">■</span> atenção <span style="color:#1f7a5c">■</span> dentro do limite</div></div><div class="bars" id="tfSalas"></div></div>
+      <div class="card"><div><h2>Faixas de tempo fora</h2><div class="sub">Fora agora + as que voltaram no período</div></div><div class="bars" id="tfFaixas"></div></div>
+    </div>
+    <div class="card" style="margin-top:18px"><div><h2>Saídas do arquivo refrigerado</h2><div class="sub">Cada linha é uma saída: da retirada para a sala até a volta ao arquivo. O tempo fica gravado mesmo depois que a amostra volta. Movimentos dos últimos 60 dias.</div></div>
+      <div class="fbar"><label>Mostrar<select id="tfMostrar"><option value="fora">Fora agora</option><option value="voltou">Já voltaram</option><option value="todas">Todas</option></select></label>
+        <label>Saída de<input type="date" id="tfDe"></label><label>até<input type="date" id="tfAte"></label>
+        <label>Sala<select id="tfSala"><option value="">Todas</option></select></label>
+        <label>Situação<select id="tfSit"><option value="">Todas</option><option value="atencao">Atenção</option><option value="critico">Crítico</option><option value="ok">Dentro do limite</option></select></label>
+        <label>Buscar<input type="search" id="tfQ" placeholder="Protocolo, cultivar, usuário…"></label>
+        <button class="btn sec" id="tfExport">Exportar CSV (Excel)</button></div>
+      <div id="tfTab"></div><div id="tfDet"></div>
+      <div class="sub" style="margin-top:8px">O tempo de quem está fora atualiza ao vivo e a situação muda quando passa do limite da sala. As que já voltaram mostram se passaram do limite enquanto estavam fora. Clique no protocolo para ver todas as saídas dele e o tempo total fora.</div>
+    </div>
+  </section>
+
   <section class="pagina" id="conciliacao" hidden>
     <div class="g2 fgrid" style="margin-bottom:18px">
       <div class="card" id="fcCard"><div><h2>O que entra na conta da conciliação</h2><div class="sub">Ligado = a amostra deveria estar no arquivo e entra na conta. Desligado = fica fora da conta. Vale para esta aba e para o quadro da Visão geral. Só muda a contagem: o app continua aceitando qualquer amostra.</div></div><div id="fcBox"></div></div>
@@ -407,7 +429,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.11.03b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.03b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.11.04a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.04a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -473,6 +495,7 @@ async function carregar(){
     let dRef = REF_DESDE; if(!total){ const m = REF.reduce((x,r)=>{ const k = L.dataRefKey(r.data)||''; return k > x ? k : x; }, REF_DESDE), d = new Date(m+'T12:00'); d.setDate(d.getDate()-3); dRef = dkey(d) < REF_DESDE ? REF_DESDE : dkey(d); }
     const [j, r, fl] = await Promise.all([ get('?acao=dados&desde=' + desde), buscaRef ? get('?acao=ref&desde=' + dRef) : null,
       get('?acao=filtro').catch(e=>({ ok:false, erro:e.message })) ]);
+    try{ const lm = await get('?acao=limites'); LIMITES = lm.limites && lm.limites.salas ? lm.limites : null; LIM_ERRO = ''; }catch(e){ LIM_ERRO = e.message || 'indisponível'; }
     try{ const rs = await get('?acao=reserva'); RESERVAS = rs.reservas || []; RES_AGORA = Number(rs.agora)||Date.now(); RES_ERRO = ''; }catch(e){ RESERVAS = []; RES_ERRO = e.message || 'indisponível'; }
     if(fl && fl.ok){ FILTRO = fl.filtro && fl.filtro.remessa ? fl.filtro : null; FILTRO_HIST = fl.historico || []; FILTRO_ERRO = ''; } else FILTRO_ERRO = (fl && fl.erro) || 'indisponível';
     DADOS = j;
@@ -526,6 +549,7 @@ function render(){
 
   renderConciliacao(true);
   renderReservas();
+  renderTempoFora();
   renderPrateleiras();
   renderViz();
   renderMapa();
@@ -534,7 +558,7 @@ function render(){
   renderMovimentos();
   renderRefStatus();
   renderCadastro();
-  $('#rodape').textContent = `Painel versão 2026.11.03b · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
+  $('#rodape').textContent = `Painel versão 2026.11.04a · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -666,6 +690,119 @@ function renderConciliacao(resumo){
     { k:'st', t:'No app', v:r=>EST[r.prot]?EST[r.prot].local:'', h:r=>EST[r.prot] ? `<span class="pill ok">${esc(EST[r.prot].local)}</span>` : '<span class="pill warn">não registrada</span>' },
     { k:'origem', t:'Planilha', h:r=>esc(r.origem||'') } ], lista, 'Nada neste filtro.', ['prot', 1]);
 }
+/* ---------- tempo fora do arquivo (saídas para as salas) ---------- */
+const LIM_PADRAO = { 'Sala de análise':{ at:24, cr:48 }, 'Sala de montagem':{ at:12, cr:24 }, 'Sala de tratamento de sementes':{ at:4, cr:8 }, 'Sala de homogeneização de sementes':{ at:48, cr:72 } };
+let LIMITES = null, LIM_ERRO = '', LIM_RASC = null, TF_DET = '';
+const limAtivo = () => (LIM_RASC || (LIMITES && LIMITES.salas) || LIM_PADRAO);
+const limSala = (sala, L0) => { L0 = L0 || limAtivo(); return L0[sala] || LIM_PADRAO[sala] || { at:24, cr:48 }; };
+const durTxt = ms => { const m = Math.max(0, Math.round(ms/60000)); if(m < 60) return m + ' min'; const h = Math.floor(m/60), d = Math.floor(h/24);
+  return d ? d + ' d ' + String(h%24).padStart(2,'0') + ' h' : h + ' h ' + String(m%60).padStart(2,'0') + ' min'; };
+const limTxt = h => h % 24 === 0 ? (h/24) + ' d' : h + ' h';
+function situacaoSaida(s){ const l = limSala(s.sala), h = s.dur/3600000; return h >= l.cr ? 'critico' : h >= l.at ? 'atencao' : 'ok'; }
+// monta as saídas a partir dos movimentos: SALA abre; ARMAZENAR/RETORNO/REMANEJAR fecha (voltou); BAIXA fecha (baixada na sala)
+function saidas(){
+  const por = {}, agora = Date.now(), out = [];
+  MOVS.filter(m=>m.protocolo && !/^Conflito|^Excluíd/.test(m.situacao||'')).slice().sort((a,b)=>a.ts-b.ts || String(a.id).localeCompare(String(b.id))).forEach(m=>{
+    const k = m.protocolo, st = por[k] || (por[k] = { slot:null, aberta:null });
+    if(m.acao==='SALA'){
+      if(st.aberta){ st.aberta.sala = m.destino || st.aberta.sala; st.aberta.salas.push(m.destino); return; }   // trocou de sala sem voltar: mesma saída
+      st.aberta = { protocolo:k, sala:m.destino||'', salas:[m.destino], de:st.slot, emb:m.embalagem, saiu:m.ts, saiuPor:m.usuario||'', cultivar:m.cultivar||'', especie:m.especie||'' };
+      out.push(st.aberta); st.slot = null; return; }
+    if(['ARMAZENAR','RETORNO','REMANEJAR'].includes(m.acao)){
+      if(st.aberta){ st.aberta.voltou = m.ts; st.aberta.voltouPor = m.usuario||''; st.aberta.para = m.prateleira ? { prateleira:+m.prateleira, andar:+m.andar, linha:+m.linha, lado:m.lado, altura:+m.altura } : null; st.aberta = null; }
+      if(m.prateleira) st.slot = { prateleira:+m.prateleira, andar:+m.andar, linha:+m.linha, lado:m.lado, altura:+m.altura }; return; }
+    if(m.acao==='BAIXA' && st.aberta){ st.aberta.baixa = m.ts; st.aberta.voltouPor = m.usuario||''; st.aberta = null; }
+  });
+  out.forEach(s=>{ const fim = s.voltou || s.baixa; s.fora = !fim; s.dur = (fim || agora) - s.saiu; s.sit = situacaoSaida(s); });
+  return out;
+}
+function renderTempoFora(){
+  if(!$('#tfKpis') || !DADOS) return;
+  const todas = saidas(), fora = todas.filter(s=>s.fora);
+  const de = $('#tfDe').value || (()=>{ const d = new Date(); d.setDate(d.getDate()-30); return dkey(d); })(), ate = $('#tfAte').value || dkey(new Date());
+  if(!$('#tfDe').value) $('#tfDe').value = de; if(!$('#tfAte').value) $('#tfAte').value = ate;
+  const noPer = todas.filter(s=>{ const k = dkey(new Date(s.saiu)); return k>=de && k<=ate; }), voltaram = noPer.filter(s=>s.voltou);
+  const n = v => Number(v).toLocaleString('pt-BR'), maior = fora.slice().sort((a,b)=>b.dur-a.dur)[0];
+  const med = voltaram.length ? voltaram.reduce((t,s)=>t+s.dur,0)/voltaram.length : 0;
+  $('#tfKpis').innerHTML = [
+    ['Fora do arquivo agora', n(fora.length), ''], ['Acima do limite crítico da sala', n(fora.filter(s=>s.sit==='critico').length), fora.some(s=>s.sit==='critico')?'bad':''],
+    ['Em atenção (passou do limite de atenção)', n(fora.filter(s=>s.sit==='atencao').length), fora.some(s=>s.sit==='atencao')?'warn':''],
+    ['Maior tempo fora agora' + (maior?' ('+maior.protocolo+')':''), maior ? durTxt(maior.dur) : '—', ''],
+    ['Voltaram ao arquivo no período', n(voltaram.length), ''], ['Tempo médio fora (das que voltaram)', voltaram.length ? durTxt(med) : '—', '']
+  ].map(([t,v,c])=>`<div class="kpi ${c}"><div class="n">${v}</div><div class="t">${esc(t)}</div></div>`).join('');
+  renderLimites(fora);
+  // fora agora por sala
+  const maxN = Math.max(1, ...L.SALAS.map(sa=>fora.filter(s=>s.sala===sa).length));
+  $('#tfSalas').innerHTML = L.SALAS.map(sa=>{ const f = fora.filter(s=>s.sala===sa), c = { ok:0, atencao:0, critico:0 }; f.forEach(s=>c[s.sit]++); const mx = f.reduce((m,s)=>Math.max(m,s.dur),0), l = limSala(sa);
+    return `<div class="brow" title="Atenção a partir de ${limTxt(l.at)} · crítico a partir de ${limTxt(l.cr)}"><span class="lbl">${esc(sa.replace(' de sementes',''))}</span><span class="track" style="display:flex">${[['ok','#1f7a5c'],['atencao','#d9892b'],['critico','#b3261e']].map(([k,cor])=>`<i style="width:${c[k]/maxN*100}%;background:${cor}"></i>`).join('')}</span><span class="v">${f.length}${f.length?' · máx '+durTxt(mx):''} <small style="color:var(--muted)">· crít. ${limTxt(l.cr)}</small></span></div>`; }).join('');
+  // faixas
+  const fx = [['até 4 h',0,4,'#1f7a5c'],['4 a 24 h',4,24,'#5aa3d6'],['1 a 3 dias',24,72,'#d9892b'],['mais de 3 dias',72,1e9,'#b3261e']], base = fora.concat(voltaram);
+  const cnt = fx.map(([,a,b])=>base.filter(s=>s.dur/3600000>=a && s.dur/3600000<b).length), mxF = Math.max(1, ...cnt);
+  $('#tfFaixas').innerHTML = fx.map(([t,,,cor],i)=>`<div class="brow"><span class="lbl">${t}</span><span class="track"><i style="width:${cnt[i]/mxF*100}%;background:${cor}"></i></span><span class="v">${cnt[i]}</span></div>`).join('');
+  // tabela
+  if($('#tfSala').options.length < 2) $('#tfSala').innerHTML = '<option value="">Todas</option>' + L.SALAS.map(sa=>`<option>${esc(sa)}</option>`).join('');
+  const mo = $('#tfMostrar').value, sa = $('#tfSala').value, si = $('#tfSit').value, q = L.up($('#tfQ').value||'');
+  let lista = mo==='fora' ? fora : mo==='voltou' ? noPer.filter(s=>!s.fora) : noPer.concat(fora.filter(s=>!noPer.includes(s)));
+  lista = lista.filter(s=>(!sa || s.sala===sa) && (!si || s.sit===si) && (!q || L.up([s.protocolo, s.cultivar, s.saiuPor, s.voltouPor, s.sala].join(' ')).includes(q)));
+  TF_LISTA = lista;
+  const maxD = Math.max(1, ...lista.map(s=>s.dur)), cor = s => s.sit==='critico' ? '#b3261e' : s.sit==='atencao' ? '#d9892b' : '#1f7a5c';
+  const pSit = s => { const l = limSala(s.sala);
+    if(s.fora) return s.sit==='critico' ? `<span class="pill bad">Crítico (limite ${limTxt(l.cr)})</span>` : s.sit==='atencao' ? `<span class="pill warn">Atenção (limite ${limTxt(l.at)})</span>` : '<span class="pill mut">Fora</span>';
+    return (s.baixa ? '<span class="pill mut">Baixada na sala</span>' : '<span class="pill ok">Voltou</span>') + (s.sit==='critico' ? ' <span class="pill bad">passou do crítico</span>' : s.sit==='atencao' ? ' <span class="pill warn">passou da atenção</span>' : ''); };
+  const dh = t => { const d = new Date(t); return pad(d.getDate())+'/'+pad(d.getMonth()+1)+' '+d.toLocaleTimeString('pt-BR').slice(0,5); };
+  tabela('tfTab', [
+    { k:'protocolo', t:'Protocolo', cls:'mono', v:s=>L.protAno(s.protocolo)*1e7+L.protNum(s.protocolo), h:s=>`<a href="#tempofora" class="lnk" data-tfp="${esc(s.protocolo)}">${esc(s.protocolo)}</a>` },
+    { k:'sit', t:'Situação', v:s=>({critico:0,atencao:1,ok:2})[s.sit], h:pSit },
+    { k:'sala', t:'Sala', h:s=>esc(s.salas.map(x=>String(x||'').replace(/ de sementes/,'').replace(/^Sala de /,'').replace(/^./,c=>c.toUpperCase())).join(' → ')) },
+    { k:'de', t:'Saiu de (posição)', cls:'mono', v:s=>s.de?L.textoSlot(s.de, s.emb):'', h:s=>esc(s.de ? L.textoSlot(s.de, s.emb) : '—') },
+    { k:'saiu', t:'Saiu em · por', v:s=>s.saiu, h:s=>`${dh(s.saiu)} · ${esc(s.saiuPor)}` },
+    { k:'voltou', t:'Voltou em · por', v:s=>s.voltou||s.baixa||9e15, h:s=>s.voltou||s.baixa ? `${dh(s.voltou||s.baixa)} · ${esc(s.voltouPor)}` : '—' },
+    { k:'dur', t:'Tempo fora', v:s=>s.dur, h:s=>`<span class="track" style="display:inline-block;width:70px;height:8px;vertical-align:middle;margin-right:6px"><i style="width:${s.dur/maxD*100}%;background:${cor(s)}"></i></span><b>${durTxt(s.dur)}</b>` },
+  ], lista, 'Nenhuma saída neste filtro.', ['dur', -1]);
+  // detalhe de um protocolo
+  if(TF_DET){ const ss = todas.filter(s=>s.protocolo===TF_DET), tot = ss.reduce((t,s)=>t+s.dur,0);
+    $('#tfDet').innerHTML = `<div class="alert ok" style="margin-top:10px"><b class="mono">${esc(TF_DET)}</b> · ${ss.length} ${ss.length===1?'saída':'saídas'} nos últimos 60 dias · <b>tempo total fora: ${durTxt(tot)}</b><br>${ss.map(s=>`${dh(s.saiu)} → ${s.voltou||s.baixa?dh(s.voltou||s.baixa):'ainda fora'} · ${esc(s.salas.join(' → '))} · ${durTxt(s.dur)}`).join('<br>')} <a href="#tempofora" class="lnk" data-tfp="">fechar</a></div>`; }
+  else $('#tfDet').innerHTML = '';
+}
+let TF_LISTA = [];
+function renderLimites(fora){
+  const box = $('#tfLimBox'); if(!box) return;
+  const adm = SESSAO && SESSAO.perfil==='Administrador', L0 = limAtivo();
+  const un = h => h % 24 === 0 ? ['d', h/24] : ['h', h];
+  const sel = (sa, k) => { const [u, v] = un(L0[sa] ? L0[sa][k] : LIM_PADRAO[sa][k]); return `<input type="number" min="1" step="1" value="${v}" data-lv="${esc(sa)}|${k}" style="width:70px;height:34px" ${adm?'':'disabled'}> <select data-lu="${esc(sa)}|${k}" style="height:34px" ${adm?'':'disabled'}><option value="h" ${u==='h'?'selected':''}>horas</option><option value="d" ${u==='d'?'selected':''}>dias</option></select>`; };
+  const info = LIMITES ? `Salvo por <b>${esc(LIMITES.por||'')}</b> em ${esc(LIMITES.em||'')}.` : 'Valores de partida (ainda não alterados).';
+  box.innerHTML = (LIM_ERRO && adm ? '<div class="alert warn">O banco ainda não tem a função dos limites (rode o arquivo <b>supabase/05_limites_salas.sql</b> no SQL Editor do Supabase). Até lá valem os valores de partida.</div>' : '')
+    + `<div class="sub">${LIM_RASC ? '<b style="color:var(--warn)">Alterações não salvas (prévia só nesta tela).</b> ' : ''}${info}</div>
+    <div class="tw"><table><thead><tr><th>Sala</th><th>Atenção a partir de</th><th>Crítico a partir de</th><th>Fora agora</th><th>Em atenção</th><th>Críticas</th></tr></thead><tbody>${L.SALAS.map(sa=>{ const f = fora.filter(s=>s.sala===sa), a = f.filter(s=>s.sit==='atencao').length, c = f.filter(s=>s.sit==='critico').length;
+      return `<tr><td>${esc(sa)}</td><td>${sel(sa,'at')}</td><td>${sel(sa,'cr')}</td><td class="mono">${f.length}</td><td>${a?`<span class="pill warn">${a}</span>`:'<span class="mono">0</span>'}</td><td>${c?`<span class="pill bad">${c}</span>`:'<span class="mono">0</span>'}</td></tr>`; }).join('')}</tbody></table></div>`
+    + (adm ? `<div class="fcbtns"><button class="btn" id="limSalvar" ${LIM_RASC && !LIM_ERRO?'':'disabled'}>Salvar limites</button><button class="btn ghost" id="limDesc" ${LIM_RASC?'':'disabled'}>Descartar</button>
+        ${ADM ? '' : '<label style="display:flex;flex-direction:column;font-size:12px;color:var(--muted)">Sua senha de administrador<input type="password" id="limSenha" autocomplete="current-password" style="height:40px"></label>'}</div><div id="limMsg"></div>` : '<div class="sub" style="margin-top:6px">Só o administrador altera os limites.</div>');
+  if(!adm) return;
+  const ler = () => { const R = JSON.parse(JSON.stringify(limAtivo()));
+    L.SALAS.forEach(sa=>{ R[sa] = R[sa] || Object.assign({}, LIM_PADRAO[sa]); ['at','cr'].forEach(k=>{ const v = Number(box.querySelector(`[data-lv="${sa}|${k}"]`).value)||1, u = box.querySelector(`[data-lu="${sa}|${k}"]`).value; R[sa][k] = u==='d' ? v*24 : v; }); });
+    return R; };
+  box.querySelectorAll('[data-lv],[data-lu]').forEach(el=>el.onchange = () => { const R = ler();
+    const bad = L.SALAS.find(sa=>R[sa].cr <= R[sa].at); if(bad){ $('#limMsg').innerHTML = `<div class="alert warn" style="margin-top:8px">${esc(bad)}: o limite crítico precisa ser maior que o de atenção.</div>`; return; }
+    LIM_RASC = JSON.stringify(R)===JSON.stringify((LIMITES && LIMITES.salas) || LIM_PADRAO) ? null : R; renderTempoFora(); });
+  $('#limDesc').onclick = () => { LIM_RASC = null; renderTempoFora(); };
+  $('#limSalvar').onclick = async () => { const adm = ADM || { usuario:SESSAO.usuario, senha:($('#limSenha')||{}).value||'' };
+    if(!adm.senha){ $('#limMsg').innerHTML = '<div class="alert warn" style="margin-top:8px">Digite sua senha de administrador para salvar.</div>'; return; }
+    $('#limSalvar').disabled = true;
+    try{ const j = await post({ acao:'limites', op:'salvar', admin:adm, limites:LIM_RASC }); LIMITES = j.limites; LIM_RASC = null; ADM = adm; renderTempoFora(); $('#limMsg').innerHTML = '<div class="alert ok" style="margin-top:8px">Limites salvos. Já valem para todos.</div>'; }
+    catch(e){ $('#limSalvar').disabled = false; $('#limMsg').innerHTML = `<div class="alert bad" style="margin-top:8px">${esc(e.message)}</div>`; } };
+}
+['#tfMostrar','#tfDe','#tfAte','#tfSala','#tfSit'].forEach(id=>$(id).addEventListener('change', ()=>{ if(TAB.tfTab) TAB.tfTab.pag = 1; renderTempoFora(); }));
+$('#tfQ').addEventListener('input', ()=>{ if(TAB.tfTab) TAB.tfTab.pag = 1; renderTempoFora(); });
+document.addEventListener('click', e=>{ const a = e.target.closest('[data-tfp]'); if(!a) return; e.preventDefault(); TF_DET = a.dataset.tfp; renderTempoFora(); });
+$('#tfExport').onclick = () => {
+  const dh = t => t ? new Date(t).toLocaleString('pt-BR') : '';
+  const cab = ['Protocolo','Sala','Saiu de','Saiu em','Saiu por','Voltou em','Voltou por','Tempo fora (horas)','Tempo fora','Situação'];
+  const lin = TF_LISTA.map(s=>[s.protocolo, s.salas.join(' → '), s.de?L.textoSlot(s.de, s.emb):'', dh(s.saiu), s.saiuPor, dh(s.voltou||s.baixa), s.voltouPor||'', (s.dur/3600000).toFixed(1).replace('.',','), durTxt(s.dur),
+    (s.fora?'Fora':s.baixa?'Baixada na sala':'Voltou') + (s.sit==='critico'?' · crítico':s.sit==='atencao'?' · atenção':'')]);
+  const csv = [cab].concat(lin).map(r=>r.map(c=>'"'+String(c??'').replace(/"/g,'""')+'"').join(';')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL_.createObjectURL(new Blob(['\ufeff'+csv], { type:'text/csv;charset=utf-8' })); a.download = 'tempo_fora_lasdm.csv'; a.click();
+};
+
 /* ---------- reservas de andar (operadores no app) ---------- */
 let RESERVAS = [], RES_ERRO = '', RES_AGORA = 0;
 function renderReservas(){
@@ -811,7 +948,7 @@ $('#btnEnviarRef').onclick = async () => {
 };
 
 /* ---------- navegação e dicas ---------- */
-const PAGINAS = ['visao','arquivo','conciliacao','movimentos','planilhas','cadastro'];
+const PAGINAS = ['visao','arquivo','tempofora','conciliacao','movimentos','planilhas','cadastro'];
 function irPara(id, semHist){
   // Cadastros tem duas partes: #cadastro/prateleiras e #cadastro/usuarios
   let sub = ''; [id, sub] = String(id||'').split('/'); sub = sub || '';
@@ -823,6 +960,7 @@ function irPara(id, semHist){
   fecharMenuCad();
   if(!semHist && location.hash!=='#'+alvo){ try{ history.pushState(null,'','#'+alvo); }catch(e){} }
   if(id==='conciliacao') renderConciliacao(false);
+  if(id==='tempofora') renderTempoFora();
   if(id==='cadastro') renderCadastro();
   window.scrollTo(0,0);
 }

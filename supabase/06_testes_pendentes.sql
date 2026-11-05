@@ -14,7 +14,7 @@ begin
   adm := _conferir(d->'admin'->>'usuario', d->'admin'->>'senha');
   if adm.usuario is null or adm.perfil <> 'Administrador' then
     return jsonb_build_object('ok', false, 'erro', 'Acesso negado: só administradores atualizam as planilhas de referência.'); end if;
-  if d->>'op' = 'inicio' then delete from referencia; return jsonb_build_object('ok', true); end if;
+  if d->>'op' = 'inicio' then delete from referencia where true; return jsonb_build_object('ok', true); end if;
   if d->>'op' = 'parte' then
     ini := _int(d->'ini');
     base := coalesce(ini, (select coalesce(max(pos) + 1, 0) from referencia));

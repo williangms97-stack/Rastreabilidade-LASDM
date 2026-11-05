@@ -144,9 +144,9 @@ begin
     select * into u from usuarios where usuario = alvo;
 
     if d->>'op' = 'zerar' then   -- apaga movimentos (e, se pedido, prateleiras). Usuários e referência ficam.
-      select count(*) into c from movimentos; apagadas := apagadas || jsonb_build_object('Movimentos', c); delete from movimentos;
+      select count(*) into c from movimentos; apagadas := apagadas || jsonb_build_object('Movimentos', c); delete from movimentos where true;
       if coalesce((d->>'prateleiras')::boolean, false) then
-        select count(*) into c from prateleiras; apagadas := apagadas || jsonb_build_object('Prateleiras', c); delete from prateleiras; end if;
+        select count(*) into c from prateleiras; apagadas := apagadas || jsonb_build_object('Prateleiras', c); delete from prateleiras where true; end if;
       perform _set_cfg('RESET_TS', (extract(epoch from now()) * 1000)::bigint::text);
       perform _set_cfg('RESET_PRAT', case when coalesce((d->>'prateleiras')::boolean, false) then '1' else '0' end);
       perform _log('Dados zerados (' || (select string_agg(key || ': ' || value, ', ') from jsonb_each_text(apagadas)) || ')', '-', adm.usuario);
@@ -192,7 +192,7 @@ begin
   adm := _conferir(d->'admin'->>'usuario', d->'admin'->>'senha');
   if adm.usuario is null or adm.perfil <> 'Administrador' then
     return jsonb_build_object('ok', false, 'erro', 'Acesso negado: só administradores atualizam as planilhas de referência.'); end if;
-  if d->>'op' = 'inicio' then delete from referencia; return jsonb_build_object('ok', true); end if;
+  if d->>'op' = 'inicio' then delete from referencia where true; return jsonb_build_object('ok', true); end if;
   if d->>'op' = 'parte' then
     ini := _int(d->'ini');
     base := coalesce(ini, (select coalesce(max(pos) + 1, 0) from referencia));

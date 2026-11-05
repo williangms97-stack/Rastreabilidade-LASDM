@@ -431,10 +431,11 @@
   const COLS_REF = {
     'NUMERO DA AMOSTRA': 'prot', 'DATA DO RECEBIMENTO': 'data', 'REMETENTE/SAFRA': 'safra', 'ESPECIE': 'especie', 'CULTIVAR': 'cultivar',
     'CATEGORIA': 'categoria', 'PENEIRA': 'peneira', 'REPRESENTATIVIDADE (SC OU KG/LOTE)': 'repres', 'LOTE/ORIGEM': 'lote', 'PRODUTOR': 'produtor',
-    'OBSERVACAO': 'obs', 'TIPOANALISE': 'tipoAnalise', 'ANALISES_ABERTAS': 'abertas', 'TIPO REMESSA': 'remessa', 'TRATAMENTO': 'tratamento',
+    'OBSERVACAO': 'obs', 'TIPOANALISE': 'tipoAnalise', 'ANALISES_ABERTAS': 'abertas', 'PROTOCOLO_ANALISES': 'pedidas', 'ANALISES_FINALIZADAS': 'finalizadas',
+    'TIPO REMESSA': 'remessa', 'TRATAMENTO': 'tratamento',
     'PROCEDENCIA/UF': 'procedencia'
   };
-  const CAMPOS_REF = ['prot', 'data', 'especie', 'cultivar', 'categoria', 'peneira', 'lote', 'produtor', 'tipoAnalise', 'remessa', 'tratamento', 'safra', 'repres', 'abertas', 'obs', 'procedencia', 'origem'];
+  const CAMPOS_REF = ['prot', 'data', 'especie', 'cultivar', 'categoria', 'peneira', 'lote', 'produtor', 'tipoAnalise', 'remessa', 'tratamento', 'safra', 'repres', 'abertas', 'pedidas', 'finalizadas', 'obs', 'procedencia', 'origem'];
   // converte as linhas lidas da planilha (array de arrays, 1ª linha = cabeçalho)
   function lerPlanilhaRef(linhas, origem) {
     if (!linhas || !linhas.length) return [];
@@ -522,6 +523,16 @@
     listas.forEach(l => (l || []).forEach(r => { const a = m[r.prot]; m[r.prot] = a && a.origem === r.origem ? Object.assign({}, r) : Object.assign({}, a || {}, r); }));
     return Object.values(m).sort((a, b) => protAno(a.prot) - protAno(b.prot) || protNum(a.prot) - protNum(b.prot));
   }
+  /* ---------- Testes do laboratório (colunas PROTOCOLO_ANALISES / ANALISES_FINALIZADAS / ANALISES_ABERTAS da planilha do sistema) ---------- */
+  const TESTES = [['UM','Umidade'],['TZ','Tetrazólio'],['G','Germinação'],['VOC','Verificação de Outras Cultivares'],['SE-VISUAL','Avaliação Visual'],
+    ['EA','Envelhecimento Acelerado'],['PMS','Peso de Mil Sementes'],['HDM','Dano Mecânico em Hipoclorito'],['DOSN','Determinação de Outras Sementes por Número'],
+    ['P','Pureza'],['FR','Teste Frio'],['SI','Sementes Infestadas'],['EC','Emergência a Campo'],['PER','Peroxidase']];
+  const normTeste = t => { const v = up(t).replace(/\s+/g, '').replace(/^E\.?A\.?$/, 'EA').replace(/^E\.?C\.?$/, 'EC').replace(/^VISUAL$/, 'SE-VISUAL'); return v; };
+  const listaTestes = v => [...new Set(String(v || '').split(/[,;]/).map(normTeste).filter(x => x && x !== '-O-' && x !== 'NAN'))];
+  const nomeTeste = k => (TESTES.find(t => t[0] === k) || [k, k])[1];
+  // testes de um protocolo da referência: pedidos, realizados (finalizados) e em aberto
+  const testesRef = r => ({ pedidos: listaTestes(r.pedidas), feitos: listaTestes(r.finalizadas), abertos: listaTestes(r.abertas) });
+
   const dataRefKey = d => { const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(d || ''); return m ? m[3] + '-' + m[2] + '-' + m[1] : ''; };
 
   /* ---------- Leitura do texto da etiqueta (OCR) ----------
@@ -622,10 +633,10 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.11.04b',
+    VERSAO_REGRAS: '2026.11.05a',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
-    EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, ehCaixinha, gradePara, definirReservas, chaveAndar, textoAndar, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
+    EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, ehCaixinha, gradePara, TESTES, nomeTeste, listaTestes, testesRef, definirReservas, chaveAndar, textoAndar, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
     SALAS, estadoAtual, ocupacao, perfisPrateleiras, foraDaRegra, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
     ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };

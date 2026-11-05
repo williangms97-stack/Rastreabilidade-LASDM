@@ -34,7 +34,7 @@ create table if not exists prateleiras (
 create table if not exists referencia (
   pos int primary key,           -- posição da linha (o painel envia em partes com posição fixa)
   prot text, data text, especie text, cultivar text, categoria text, peneira text, lote text, produtor text,
-  tipo_analise text, remessa text, tratamento text, safra text, repres text, abertas text, obs text,
+  tipo_analise text, remessa text, tratamento text, safra text, repres text, abertas text, pedidas text default '', finalizadas text default '', obs text,
   procedencia text, origem text, data_key text
 );
 create index if not exists referencia_prot on referencia (prot);
@@ -185,8 +185,7 @@ begin
 end $$;
 
 -- ---------- planilhas de referência (enviadas pelo painel, só administradores) ----------
--- op 'inicio' limpa · op 'parte' grava linhas (com "ini" na mesma posição: repetir não duplica) · op 'fim' remove sobras e registra a data
-create or replace function _referencia(d jsonb) returns jsonb
+-- op 'inicio' limpa · op 'parte' grava linhas (com "ini" na mesma posição: repetir nãcreate or replace function _referencia(d jsonb) returns jsonb
 language plpgsql set search_path = public as $$
 declare adm usuarios; ini int; base int; tot int; r jsonb; i int := 0;
 begin
@@ -199,14 +198,14 @@ begin
     base := coalesce(ini, (select coalesce(max(pos) + 1, 0) from referencia));
     for r in select * from jsonb_array_elements(coalesce(d->'linhas', '[]'::jsonb)) loop
       insert into referencia (pos, prot, data, especie, cultivar, categoria, peneira, lote, produtor, tipo_analise, remessa, tratamento,
-                              safra, repres, abertas, obs, procedencia, origem, data_key)
+                              safra, repres, abertas, pedidas, finalizadas, obs, procedencia, origem, data_key)
       values (base + i, coalesce(r->>'prot', ''), coalesce(r->>'data', ''), coalesce(r->>'especie', ''), coalesce(r->>'cultivar', ''), coalesce(r->>'categoria', ''),
               coalesce(r->>'peneira', ''), coalesce(r->>'lote', ''), coalesce(r->>'produtor', ''), coalesce(r->>'tipoAnalise', ''), coalesce(r->>'remessa', ''),
-              coalesce(r->>'tratamento', ''), coalesce(r->>'safra', ''), coalesce(r->>'repres', ''), coalesce(r->>'abertas', ''), coalesce(r->>'obs', ''),
+              coalesce(r->>'tratamento', ''), coalesce(r->>'safra', ''), coalesce(r->>'repres', ''), coalesce(r->>'abertas', ''), coalesce(r->>'pedidas', ''), coalesce(r->>'finalizadas', ''), coalesce(r->>'obs', ''),
               coalesce(r->>'procedencia', ''), coalesce(r->>'origem', ''), _data_key(r->>'data'))
       on conflict (pos) do update set prot = excluded.prot, data = excluded.data, especie = excluded.especie, cultivar = excluded.cultivar,
         categoria = excluded.categoria, peneira = excluded.peneira, lote = excluded.lote, produtor = excluded.produtor, tipo_analise = excluded.tipo_analise,
-        remessa = excluded.remessa, tratamento = excluded.tratamento, safra = excluded.safra, repres = excluded.repres, abertas = excluded.abertas,
+        remessa = excluded.remessa, tratamento = excluded.tratamento, safra = excluded.safra, repres = excluded.repres, abertas = excluded.abertas, pedidas = excluded.pedidas, finalizadas = excluded.finalizadas,
         obs = excluded.obs, procedencia = excluded.procedencia, origem = excluded.origem, data_key = excluded.data_key;
       i := i + 1;
     end loop;
@@ -221,6 +220,7 @@ begin
     return jsonb_build_object('ok', true, 'linhas', coalesce(tot, (select count(*) from referencia)::int));
   end if;
   return jsonb_build_object('ok', false, 'erro', 'Operação inválida.');
+end $$;ct('ok', false, 'erro', 'Operação inválida.');
 end $$;
 
 -- =====================================================================
@@ -240,7 +240,7 @@ $$;
 create or replace function _ref_json(r referencia) returns jsonb language sql immutable as $$
   select jsonb_build_object('prot', r.prot, 'data', r.data, 'especie', r.especie, 'cultivar', r.cultivar, 'categoria', r.categoria, 'peneira', r.peneira,
     'lote', r.lote, 'produtor', r.produtor, 'tipoAnalise', r.tipo_analise, 'remessa', r.remessa, 'tratamento', r.tratamento, 'safra', r.safra,
-    'repres', r.repres, 'abertas', r.abertas, 'obs', r.obs, 'procedencia', r.procedencia, 'origem', r.origem)
+    'repres', r.repres, 'abertas', r.abertas, 'pedidas', coalesce(r.pedidas, ''), 'finalizadas', coalesce(r.finalizadas, ''), 'obs', r.obs, 'procedencia', r.procedencia, 'origem', r.origem)
 $$;
 
 create or replace function api_get(p jsonb default '{}'::jsonb) returns jsonb

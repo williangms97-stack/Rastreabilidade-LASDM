@@ -30,6 +30,7 @@
       if(d.acao === 'filtro') return resp(await rpc('api_filtro', { d }));
       if(d.acao === 'reserva') return resp(await rpc('api_reserva', { d }));
       if(d.acao === 'limites') return resp(await rpc('api_limites', { d }));
+      if(d.acao === 'testes') return resp(await rpc('api_testes', { d }));
       for(const m of (d.movimentos || [])){ if(m.foto){ try{ m.fotoUrl = await subirFoto(m); }catch(e){ m.fotoUrl = 'Erro ao salvar foto: ' + e.message; } delete m.foto; } }
       return resp(await rpc('api_post', { d }));
     }
@@ -37,13 +38,14 @@
     if(p.acao === 'filtro') return resp(await rpc('api_filtro', { d:{ op:'ler' } }));
     if(p.acao === 'reserva') return resp(await rpc('api_reserva', { d:{ op:'listar' } }));
     if(p.acao === 'limites') return resp(await rpc('api_limites', { d:{ op:'ler' } }));
+    if(p.acao === 'testes') return resp(await rpc('api_testes', { d:{ op:'ler' } }));
     return resp(await rpc('api_get', { p }));
   };
 })();
 </script>
-<script src="regras.js?v=2026.11.04b"></script>
+<script src="regras.js?v=2026.11.05a"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.11.04b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.11.05a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -150,6 +152,10 @@ h2{margin:0;font-size:18px}
 .fcbtns{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:flex-end}
 .fchist{font-size:13px;line-height:1.6;max-height:520px;overflow:auto}.fchist div{padding:6px 0;border-bottom:1px solid var(--hair)}
 .lnk{color:var(--accent);font-weight:700}
+.tt{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;margin:1px 3px 1px 0;font-family:var(--f-code);border:1px solid transparent;white-space:nowrap}
+.tt.f{background:var(--ok-bg);color:var(--accent)}.tt.a{background:var(--warn-bg);color:var(--warn);border-color:rgba(154,91,0,.35)}.tt.x{background:var(--hair);color:var(--muted);text-decoration:line-through}
+button.tt{cursor:pointer;font-size:12px;padding:4px 9px}button.tt[aria-pressed=true]{outline:2px solid var(--accent);outline-offset:1px}
+.tpprog{display:inline-block;width:64px;height:7px;border-radius:4px;background:var(--hair);overflow:hidden;vertical-align:middle;margin-right:6px}.tpprog i{display:block;height:100%;background:#1f7a5c}
 .btn{height:40px;border:0;border-radius:8px;padding:0 16px;font-weight:700;background:var(--accent);color:#fff;cursor:pointer}
 .btn.sec{background:var(--frost);color:var(--ink)} .btn:disabled{opacity:.5}
 .tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
@@ -261,7 +267,7 @@ tbody tr:hover{background:#f7fbf9}
     <a class="hbtn" href="./" title="Abrir o app de bipagem">App</a>
     <button class="hbtn" id="btnSair">Sair</button>
   </div>
-  <nav class="tabs" aria-label="Seções"><a href="#cadastro">Cadastros</a><a href="#visao" class="on">Visão geral</a><a href="#arquivo">Arquivo e salas</a><a href="#tempofora">Tempo fora do arquivo</a><a href="#conciliacao">Conciliação</a><a href="#movimentos">Movimentos</a><a href="#planilhas">Planilhas de referência</a></nav>
+  <nav class="tabs" aria-label="Seções"><a href="#cadastro">Cadastros</a><a href="#visao" class="on">Visão geral</a><a href="#arquivo">Arquivo e salas</a><a href="#tempofora">Tempo fora do arquivo</a><a href="#testes">Testes pendentes</a><a href="#conciliacao">Conciliação</a><a href="#movimentos">Movimentos</a><a href="#planilhas">Planilhas de referência</a></nav>
 </header>
 
 <main id="main" hidden>
@@ -338,6 +344,26 @@ tbody tr:hover{background:#f7fbf9}
         <button class="btn sec" id="tfExport">Exportar CSV (Excel)</button></div>
       <div id="tfTab"></div><div id="tfDet"></div>
       <div class="sub" style="margin-top:8px">O tempo de quem está fora atualiza ao vivo e a situação muda quando passa do limite da sala. As que já voltaram mostram se passaram do limite enquanto estavam fora. Clique no protocolo para ver todas as saídas dele e o tempo total fora.</div>
+    </div>
+  </section>
+
+  <!-- TESTES PENDENTES -->
+  <section class="pagina" id="testes" hidden>
+    <div class="sub" id="tpFonte" style="margin-bottom:12px"></div>
+    <div id="tpAviso"></div>
+    <div class="kpis" id="tpKpis"></div>
+    <div class="g2" style="margin-top:18px;grid-template-columns:.9fr 1.1fr;align-items:start">
+      <div class="card"><div><h2>Pendências por teste</h2><div class="sub">Quantos protocolos ainda têm cada teste em aberto. Clique num teste para filtrar a tabela.</div></div><div class="bars" id="tpBarras"></div></div>
+      <div class="card" id="tpCfgCard"><div><h2>Testes considerados</h2><div class="sub">Marcado = conta como pendência nesta aba. A Umidade (UM) começa desmarcada porque o sistema nunca a dá por finalizada. Só o administrador altera e salva (vale para todos).</div></div><div id="tpCfg"></div></div>
+    </div>
+    <div class="card" style="margin-top:18px"><div><h2>Testes por protocolo</h2><div class="sub">Verde = já realizado · laranja = pendente · riscado = não considerado. "Onde está" vem do app (arquivo refrigerado ou sala).</div></div>
+      <div class="fbar"><label>Mostrar<select id="tpMostrar"><option value="pend">Com pendência</option><option value="ok">Todos os testes realizados</option><option value="todos">Todos</option></select></label>
+        <label>Recebido de<input type="date" id="tpDe"></label><label>até<input type="date" id="tpAte"></label>
+        <label>Remessa<select id="tpRem"><option value="">Todas</option></select></label>
+        <label>Buscar<input type="search" id="tpQ" placeholder="Protocolo, cultivar, lote…"></label>
+        <button class="btn sec" id="tpExport">Exportar CSV (Excel)</button></div>
+      <div class="fch3" style="margin-top:0">Filtrar por teste pendente (clique para escolher um ou vários)</div><div id="tpChips" style="margin-bottom:12px"></div>
+      <div id="tpTab"></div><div id="tpDet"></div>
     </div>
   </section>
 
@@ -429,7 +455,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.11.04b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.04b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.11.05a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.05a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -495,6 +521,7 @@ async function carregar(){
     let dRef = REF_DESDE; if(!total){ const m = REF.reduce((x,r)=>{ const k = L.dataRefKey(r.data)||''; return k > x ? k : x; }, REF_DESDE), d = new Date(m+'T12:00'); d.setDate(d.getDate()-3); dRef = dkey(d) < REF_DESDE ? REF_DESDE : dkey(d); }
     const [j, r, fl] = await Promise.all([ get('?acao=dados&desde=' + desde), buscaRef ? get('?acao=ref&desde=' + dRef) : null,
       get('?acao=filtro').catch(e=>({ ok:false, erro:e.message })) ]);
+    try{ const tt = await get('?acao=testes'); TESTES_CFG = tt.testes && tt.testes.fora ? tt.testes : null; TP_REFEM = tt.refEm || ''; TP_ERRO = ''; }catch(e){ TP_ERRO = e.message || 'indisponível'; }
     try{ const lm = await get('?acao=limites'); LIMITES = lm.limites && lm.limites.salas ? lm.limites : null; LIM_ERRO = ''; }catch(e){ LIM_ERRO = e.message || 'indisponível'; }
     try{ const rs = await get('?acao=reserva'); RESERVAS = rs.reservas || []; RES_AGORA = Number(rs.agora)||Date.now(); RES_ERRO = ''; }catch(e){ RESERVAS = []; RES_ERRO = e.message || 'indisponível'; }
     if(fl && fl.ok){ FILTRO = fl.filtro && fl.filtro.remessa ? fl.filtro : null; FILTRO_HIST = fl.historico || []; FILTRO_ERRO = ''; } else FILTRO_ERRO = (fl && fl.erro) || 'indisponível';
@@ -550,6 +577,7 @@ function render(){
   renderConciliacao(true);
   renderReservas();
   renderTempoFora();
+  if(document.querySelector('#testes:not([hidden])')) renderTestes();
   renderPrateleiras();
   renderViz();
   renderMapa();
@@ -558,7 +586,7 @@ function render(){
   renderMovimentos();
   renderRefStatus();
   renderCadastro();
-  $('#rodape').textContent = `Painel versão 2026.11.04b · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
+  $('#rodape').textContent = `Painel versão 2026.11.05a · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -803,6 +831,105 @@ $('#tfExport').onclick = () => {
   const a = document.createElement('a'); a.href = URL_.createObjectURL(new Blob(['\ufeff'+csv], { type:'text/csv;charset=utf-8' })); a.download = 'tempo_fora_lasdm.csv'; a.click();
 };
 
+/* ---------- testes pendentes (colunas de testes da planilha do sistema) ---------- */
+let TESTES_CFG = null, TP_REFEM = '', TP_ERRO = '', TP_RASC = null, TP_SEL = new Set(), TP_DET = '', TP_LISTA = [];
+const TP_FORA_PADRAO = ['UM'];
+const tpFora = () => new Set(TP_RASC || (TESTES_CFG && TESTES_CFG.fora) || TP_FORA_PADRAO);
+function tpLinhas(){
+  const fora = tpFora();
+  return REF.filter(r=>String(r.pedidas||'').trim()).map(r=>{ const t = L.testesRef(r), ab = t.abertos.filter(k=>!fora.has(k)), fe = t.feitos.filter(k=>!fora.has(k));
+    return { r, prot:r.prot, t, ab, fe, tot:ab.length + fe.length, dk:L.dataRefKey(r.data) }; });
+}
+function tpOnde(prot){
+  const e = EST[prot]; if(!e) return '<span class="pill mut">Não registrada no app</span>';
+  if(e.status==='ARQUIVO' && e.slot) return `<span class="pill ok">Arquivo · P.${L.p2(e.slot.prateleira)} A.${L.p2(e.slot.andar)}</span>`;
+  if(e.status==='SALA'){ const s = saidas().find(x=>x.protocolo===prot && x.fora); return `<span class="pill" style="background:#e7f0fb;color:#24588f">${esc(String(e.local||'Sala').replace(' de sementes',''))}${s?' · '+durTxt(s.dur):''}</span>`; }
+  if(e.status==='BAIXA') return '<span class="pill mut">Baixada</span>';
+  return '<span class="pill mut">' + esc(e.status||'') + '</span>';
+}
+const tpChip = (k, cls) => `<span class="tt ${cls}" title="${esc(L.nomeTeste(k))}">${esc(k)}</span>`;
+function renderTestes(){
+  if(!$('#tpKpis') || !DADOS) return;
+  const todas = tpLinhas(), fora = tpFora(), n = v => Number(v).toLocaleString('pt-BR');
+  $('#tpFonte').innerHTML = `Dados da planilha do sistema${TP_REFEM ? ' importada em <b>' + esc(TP_REFEM.split(' por ')[0]) + '</b>' : ''} (colunas PROTOCOLO_ANALISES, ANALISES_FINALIZADAS e ANALISES_ABERTAS). Atualiza a cada nova importação em "Planilhas de referência". Amostras manuais não entram (a planilha manual não informa os testes finalizados).`;
+  const adm = SESSAO && SESSAO.perfil==='Administrador';
+  $('#tpAviso').innerHTML = TP_ERRO && adm ? '<div class="alert warn" style="margin-bottom:12px">O banco ainda não tem a função dos testes pendentes (rode o arquivo <b>supabase/06_testes_pendentes.sql</b> no SQL Editor do Supabase) e depois importe a planilha do sistema de novo.</div>'
+    : !todas.length && REF.length ? '<div class="alert warn" style="margin-bottom:12px">A referência atual ainda não tem os testes por protocolo. Importe a planilha do sistema de novo em <a href="#planilhas" data-ir="planilhas" class="lnk">Planilhas de referência</a>.</div>' : '';
+  const pend = todas.filter(x=>x.ab.length), hoje = new Date(), d30 = (()=>{ const d = new Date(); d.setDate(d.getDate()-30); return dkey(d); })();
+  const cont = {}; L.TESTES.forEach(([k])=>cont[k] = 0); todas.forEach(x=>x.t.abertos.forEach(k=>{ cont[k] = (cont[k]||0) + 1; }));
+  const ped = {}; todas.forEach(x=>x.t.pedidos.forEach(k=>{ ped[k] = (ped[k]||0) + 1; }));
+  const cons = Object.keys(cont).filter(k=>!fora.has(k)).sort((a,b)=>cont[b]-cont[a]), top = cons[0];
+  $('#tpKpis').innerHTML = [
+    ['Protocolos com teste pendente', n(pend.length), pend.length?'warn':''], ['Testes pendentes no total', n(pend.reduce((t,x)=>t+x.ab.length,0)), ''],
+    ['Protocolos com todos os testes realizados', n(todas.length - pend.length), ''], ['Teste mais pendente' + (top && cont[top] ? ': ' + top : ''), top && cont[top] ? n(cont[top]) : '—', ''],
+    ['Com pendência há mais de 30 dias do recebimento', n(pend.filter(x=>x.dk && x.dk < d30).length), '']
+  ].map(([t,v,c])=>`<div class="kpi ${c}"><div class="n">${v}</div><div class="t">${esc(t)}</div></div>`).join('');
+  // barras: um teste por barra, do mais pendente para o menos
+  const mx = Math.max(1, ...cons.map(k=>cont[k]));
+  $('#tpBarras').innerHTML = cons.map(k=>`<div class="brow" style="cursor:pointer" data-tpb="${esc(k)}" title="${esc(L.nomeTeste(k))}"><span class="lbl"><b class="mono">${esc(k)}</b> <small style="color:var(--muted)">${esc(L.nomeTeste(k))}</small></span><span class="track"><i style="width:${cont[k]/mx*100}%;background:#d9892b"></i></span><span class="v">${n(cont[k])}</span></div>`).join('')
+    + (fora.size ? `<div class="sub" style="margin-top:8px">Fora da conta: ${[...fora].map(k=>esc(k)+' ('+n(cont[k]||0)+' em aberto)').join(', ')}.</div>` : '');
+  // testes considerados
+  const lista = L.TESTES.map(t=>t[0]).concat(Object.keys(ped).filter(k=>!L.TESTES.some(t=>t[0]===k)));
+  $('#tpCfg').innerHTML = `<div class="sub">${TP_RASC ? '<b style="color:var(--warn)">Alterações não salvas (prévia só nesta tela).</b> ' : ''}${TESTES_CFG ? 'Salvo por <b>' + esc(TESTES_CFG.por||'') + '</b> em ' + esc(TESTES_CFG.em||'') + '.' : 'Padrão: só a Umidade (UM) fora da conta.'}</div>`
+    + (adm ? '<div style="display:flex;gap:8px;margin:6px 0 8px"><button class="btn ghost" style="height:34px" id="tpTodos">Marcar todos</button><button class="btn ghost" style="height:34px" id="tpNenhum">Desmarcar todos</button></div>' : '')
+    + `<div class="tw"><table><thead><tr><th></th><th>Sigla</th><th>Teste</th><th>Pedidos</th><th>Em aberto</th></tr></thead><tbody>${lista.map(k=>`<tr><td><input type="checkbox" data-tpc="${esc(k)}" ${fora.has(k)?'':'checked'} ${adm?'':'disabled'}></td><td class="mono"><b>${esc(k)}</b></td><td>${esc(L.nomeTeste(k))}${fora.has(k)?' <span class="pill mut">Fora da conta</span>':!ped[k]?' <span class="sub" style="font-size:11px">· sem protocolos na planilha</span>':''}</td><td class="mono">${n(ped[k]||0)}</td><td class="mono">${n(cont[k]||0)}</td></tr>`).join('')}</tbody></table></div>`
+    + (adm ? `<div class="fcbtns"><button class="btn" id="tpSalvar" ${TP_RASC && !TP_ERRO?'':'disabled'}>Salvar e congelar</button><button class="btn ghost" id="tpDesc" ${TP_RASC?'':'disabled'}>Descartar</button>
+        ${ADM ? '' : '<label style="display:flex;flex-direction:column;font-size:12px;color:var(--muted)">Sua senha de administrador<input type="password" id="tpSenha" autocomplete="current-password" style="height:40px"></label>'}</div><div id="tpMsg"></div>` : '<div class="sub" style="margin-top:6px">Só o administrador altera os testes considerados.</div>');
+  // chips de filtro (um ou vários)
+  TP_SEL.forEach(k=>{ if(fora.has(k)) TP_SEL.delete(k); });
+  $('#tpChips').innerHTML = `<button class="tt f" data-tps="" aria-pressed="${!TP_SEL.size}">Todos</button>` + lista.map(k=>`<button class="tt ${fora.has(k)?'x':'a'}" data-tps="${esc(k)}" aria-pressed="${TP_SEL.has(k)}" ${fora.has(k)?'disabled':''} title="${esc(L.nomeTeste(k))}">${esc(k)}</button>`).join('');
+  // tabela
+  if(!$('#tpDe').value) $('#tpDe').value = REF_DESDE; if(!$('#tpAte').value) $('#tpAte').value = dkey(hoje);
+  const rems = [...new Set(todas.map(x=>x.r.remessa).filter(Boolean))].sort();
+  if($('#tpRem').options.length !== rems.length + 1){ const v = $('#tpRem').value; $('#tpRem').innerHTML = '<option value="">Todas</option>' + rems.map(r=>`<option>${esc(r)}</option>`).join(''); $('#tpRem').value = v; }
+  const mo = $('#tpMostrar').value, de = $('#tpDe').value, ate = $('#tpAte').value, rem = $('#tpRem').value, q = L.up($('#tpQ').value||'');
+  const lin = todas.filter(x=>(mo==='todos' || (mo==='pend' ? x.ab.length : !x.ab.length)) && (!x.dk || (x.dk>=de && x.dk<=ate)) && (!rem || x.r.remessa===rem)
+    && (!TP_SEL.size || x.ab.some(k=>TP_SEL.has(k))) && (!q || L.up([x.prot, x.r.cultivar, x.r.lote, x.r.especie].join(' ')).includes(q)));
+  TP_LISTA = lin;
+  const dias = x => { if(!x.dk) return ''; const d = Math.round((hoje - new Date(x.dk+'T12:00'))/864e5); return d + ' d'; };
+  tabela('tpTab', [
+    { k:'prot', t:'Protocolo', cls:'mono', v:x=>L.protAno(x.prot)*1e7+L.protNum(x.prot), h:x=>`<a href="#testes" class="lnk" data-tpp="${esc(x.prot)}">${esc(x.prot)}</a>` },
+    { k:'dk', t:'Recebido', v:x=>x.dk, h:x=>`${esc(String(x.r.data||'').slice(0,5))} · <span class="mono">${dias(x)}</span>` },
+    { k:'cult', t:'Espécie · cultivar', h:x=>esc([x.r.especie, x.r.cultivar].filter(Boolean).join(' · ')) },
+    { k:'rem', t:'Remessa · análise', h:x=>esc([x.r.remessa, /DEFINITIVA/i.test(x.r.tipoAnalise)?'Definitiva':/INTER|INTRA/i.test(x.r.tipoAnalise)?'Interlab.':x.r.tipoAnalise?'Prévia':''].filter(Boolean).join(' · ')) },
+    { k:'fe', t:'Realizados', h:x=>x.t.feitos.map(k=>tpChip(k, fora.has(k)?'x':'f')).join('') || '<span class="sub">—</span>' },
+    { k:'ab', t:'Pendentes', v:x=>x.ab.length, h:x=>x.t.abertos.map(k=>tpChip(k, fora.has(k)?'x':'a')).join('') || '<span class="pill ok">nenhum</span>' },
+    { k:'pr', t:'Progresso', v:x=>x.tot ? x.fe.length/x.tot : 1, h:x=>`<span class="tpprog"><i style="width:${x.tot?x.fe.length/x.tot*100:100}%"></i></span>${x.fe.length} de ${x.tot}` },
+    { k:'onde', t:'Onde está', h:x=>tpOnde(x.prot) } ], lin, 'Nenhum protocolo neste filtro.', ['dk', -1]);
+  // detalhe
+  if(TP_DET){ const x = todas.find(y=>y.prot===TP_DET);
+    $('#tpDet').innerHTML = x ? `<div class="alert ok" style="margin-top:10px"><b class="mono">${esc(x.prot)}</b> · ${esc([x.r.especie, x.r.cultivar, x.r.lote].filter(Boolean).join(' · '))} · recebido em ${esc(x.r.data||'')} · ${tpOnde(x.prot)}<br>
+      ${x.t.pedidos.map(k=>`${tpChip(k, fora.has(k)?'x':x.t.feitos.includes(k)?'f':'a')} ${esc(L.nomeTeste(k))} — ${fora.has(k)?'não considerado':x.t.feitos.includes(k)?'realizado':'pendente'}`).join('<br>')}
+      <br><a href="#arquivo" class="lnk" data-tpmapa="${esc(x.prot)}">Ver no mapa do arquivo</a> · <a href="#testes" class="lnk" data-tpp="">fechar</a></div>` : ''; }
+  else $('#tpDet').innerHTML = '';
+  if(!adm) return;
+  const mexer = fn => { const f = tpFora(); fn(f); const arr = [...f].sort(), base = [...new Set((TESTES_CFG && TESTES_CFG.fora) || TP_FORA_PADRAO)].sort(); TP_RASC = JSON.stringify(arr)===JSON.stringify(base) ? null : arr; renderTestes(); };
+  $('#tpCfg').querySelectorAll('[data-tpc]').forEach(cb=>cb.onchange = ()=>mexer(f=>{ cb.checked ? f.delete(cb.dataset.tpc) : f.add(cb.dataset.tpc); }));
+  $('#tpTodos').onclick = ()=>mexer(f=>f.clear()); $('#tpNenhum').onclick = ()=>mexer(f=>lista.forEach(k=>f.add(k)));
+  $('#tpDesc').onclick = ()=>{ TP_RASC = null; renderTestes(); };
+  $('#tpSalvar').onclick = async ()=>{ const a = ADM || { usuario:SESSAO.usuario, senha:($('#tpSenha')||{}).value||'' };
+    if(!a.senha){ $('#tpMsg').innerHTML = '<div class="alert warn" style="margin-top:8px">Digite sua senha de administrador para salvar.</div>'; return; }
+    $('#tpSalvar').disabled = true;
+    try{ const j = await post({ acao:'testes', op:'salvar', admin:a, fora:TP_RASC }); TESTES_CFG = j.testes; TP_RASC = null; ADM = a; renderTestes(); $('#tpMsg').innerHTML = '<div class="alert ok" style="margin-top:8px">Testes considerados salvos. Já valem para todos.</div>'; }
+    catch(e){ $('#tpSalvar').disabled = false; $('#tpMsg').innerHTML = `<div class="alert bad" style="margin-top:8px">${esc(e.message)}</div>`; } };
+}
+['#tpMostrar','#tpDe','#tpAte','#tpRem'].forEach(id=>$(id).addEventListener('change', ()=>{ if(TAB.tpTab) TAB.tpTab.pag = 1; renderTestes(); }));
+$('#tpQ').addEventListener('input', ()=>{ if(TAB.tpTab) TAB.tpTab.pag = 1; renderTestes(); });
+document.addEventListener('click', e=>{
+  const c = e.target.closest('[data-tps]'); if(c){ const k = c.dataset.tps; if(!k) TP_SEL.clear(); else TP_SEL.has(k) ? TP_SEL.delete(k) : TP_SEL.add(k); if(TAB.tpTab) TAB.tpTab.pag = 1; renderTestes(); return; }
+  const b = e.target.closest('[data-tpb]'); if(b){ TP_SEL = new Set([b.dataset.tpb]); $('#tpMostrar').value = 'pend'; if(TAB.tpTab) TAB.tpTab.pag = 1; renderTestes(); $('#tpChips').scrollIntoView({ block:'center' }); return; }
+  const p = e.target.closest('[data-tpp]'); if(p){ e.preventDefault(); TP_DET = p.dataset.tpp; renderTestes(); return; }
+  const m = e.target.closest('[data-tpmapa]'); if(m){ e.preventDefault(); irPara('arquivo'); $('#vzBusca').value = m.dataset.tpmapa; localizarProtocolo(); }
+});
+$('#tpExport').onclick = () => {
+  const fora = tpFora(), cab = ['Protocolo','Recebido','Espécie','Cultivar','Lote','Remessa','Tipo de análise','Realizados','Pendentes','Não considerados','Progresso','Onde está'];
+  const onde = p => { const e = EST[p]; return !e ? 'Não registrada no app' : e.status==='ARQUIVO' && e.slot ? 'Arquivo ' + L.textoSlot(e.slot, e.embalagem) : e.status==='SALA' ? (e.local||'Sala') : e.status; };
+  const lin = TP_LISTA.map(x=>[x.prot, x.r.data, x.r.especie, x.r.cultivar, x.r.lote, x.r.remessa, x.r.tipoAnalise, x.t.feitos.filter(k=>!fora.has(k)).join(', '), x.ab.join(', '),
+    x.t.pedidos.filter(k=>fora.has(k)).join(', '), x.fe.length + ' de ' + x.tot, onde(x.prot)]);
+  const csv = [cab].concat(lin).map(r=>r.map(c=>'"'+String(c??'').replace(/"/g,'""')+'"').join(';')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL_.createObjectURL(new Blob(['﻿'+csv], { type:'text/csv;charset=utf-8' })); a.download = 'testes_pendentes_lasdm.csv'; a.click();
+};
+
 /* ---------- reservas de andar (operadores no app) ---------- */
 let RESERVAS = [], RES_ERRO = '', RES_AGORA = 0;
 function renderReservas(){
@@ -948,7 +1075,7 @@ $('#btnEnviarRef').onclick = async () => {
 };
 
 /* ---------- navegação e dicas ---------- */
-const PAGINAS = ['visao','arquivo','tempofora','conciliacao','movimentos','planilhas','cadastro'];
+const PAGINAS = ['visao','arquivo','tempofora','testes','conciliacao','movimentos','planilhas','cadastro'];
 function irPara(id, semHist){
   // Cadastros tem duas partes: #cadastro/prateleiras e #cadastro/usuarios
   let sub = ''; [id, sub] = String(id||'').split('/'); sub = sub || '';
@@ -961,6 +1088,7 @@ function irPara(id, semHist){
   if(!semHist && location.hash!=='#'+alvo){ try{ history.pushState(null,'','#'+alvo); }catch(e){} }
   if(id==='conciliacao') renderConciliacao(false);
   if(id==='tempofora') renderTempoFora();
+  if(id==='testes') renderTestes();
   if(id==='cadastro') renderCadastro();
   window.scrollTo(0,0);
 }

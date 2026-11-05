@@ -39,7 +39,7 @@
 
   /* ---------- Tipos de remessa → grupo de prateleira ---------- */
   const GRUPOS = {
-    VERDE:      { nome: 'Lote / Teste / Entrada semente / Devoluções — análise prévia (CQI)', curto: 'Verde', cor: '#83E28E', tinta: '#0f3d17' },
+    VERDE:      { nome: 'Lote / Teste / Entrada semente / Devoluções — análise prévia (CQI)', curto: 'Prévia (CQI)', cor: '#83E28E', tinta: '#0f3d17' },
     DEFINITIVA: { nome: 'Lote definitivo / Reembalagem / Revalidação — análise definitiva', curto: 'Definitiva', cor: '#1E6B3C', tinta: '#ffffff' },
     TSI:        { nome: 'TSI — análise prévia (CQI)', curto: 'TSI', cor: '#F7C7AC', tinta: '#6b2c0b' },
     TSI_DEF:    { nome: 'TSI — análise definitiva', curto: 'TSI Definitiva', cor: '#A4472A', tinta: '#ffffff' },
@@ -633,7 +633,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.11.05a',
+    VERSAO_REGRAS: '2026.11.05b',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, ehCaixinha, gradePara, TESTES, nomeTeste, listaTestes, testesRef, definirReservas, chaveAndar, textoAndar, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

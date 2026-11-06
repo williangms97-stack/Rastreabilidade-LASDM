@@ -40,9 +40,9 @@
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.11.05b"></script>
+<script src="regras.js?v=2026.11.06a"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.11.05b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.11.06a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -337,7 +337,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.11.05b</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.11.06a</div>
     </section>
   </main>
 
@@ -817,8 +817,7 @@ function auditar(a, ref){
     { campo:'espécie', ok: ca.cultura===cr.cultura, ref: ref.especie },
     { campo:'cultivar', ok: L.confere(a.cultivar, ref.cultivar)!==false, ref: ref.cultivar },
     { campo:'tipo de remessa', ok: L.up(a.remessa)===L.up(ref.remessa), ref: ref.remessa },
-    { campo:'tratamento', ok: ca.tratada===cr.tratada, ref: ref.tratamento || 'sem tratamento' },
-    { campo:'produtor INOVA', ok: ca.inova===cr.inova, ref: ref.produtor }
+    { campo:'tratamento', ok: ca.tratada===cr.tratada, ref: ref.tratamento || 'sem tratamento' }
   ];
 }
 const segHTML = (id, ops, val, dis) => `<div class="seg" id="${id}">${ops.map(([v,t])=>`<button type="button" data-v="${esc(v)}" aria-pressed="${v===val}" ${dis?'disabled':''}>${esc(t)}</button>`).join('')}</div>`;
@@ -826,7 +825,7 @@ function telaAmostra(c){
   const { prot, ref, e, ctx, a } = c;
   const lido = ctx.lido || {};
   const espSel = ['SOJA','MILHO'].includes(L.up(a.especie)) ? L.up(a.especie) : 'OUTRA';
-  const tratada = L.classificar(a).tratada, inova = L.classificar(a).inova;
+  const tratada = L.classificar(a).tratada;
   const ta = /DEFINITIVA/.test(L.up(a.tipoAnalise)) ? 'DEF' : /INTER|INTRA/.test(L.up(a.tipoAnalise)) ? 'INTER' : 'PREV';
   const camposHTML = c.editar ? `
     <div class="small">${lido.prot ? 'Dados lidos da etiqueta' + (lido.cultivar||lido.remessa ? ' (cultivar e remessa)' : '') + '. Confira e complete com 3 toques.' : 'Confira e complete os dados da amostra.'}</div>
@@ -836,10 +835,7 @@ function telaAmostra(c){
     </div>
     <div><h3 style="margin-bottom:6px">Espécie</h3>${segHTML('amEsp', [['SOJA','Soja'],['MILHO','Milho'],['OUTRA','Outra']], espSel)}</div>
     <label class="f" id="amEspOutraBox" ${espSel==='OUTRA'?'':'hidden'}>Qual espécie (vira amostra manual)<input type="text" id="amEspOutra" placeholder="Ex.: FEIJÃO" value="${espSel==='OUTRA'?esc(a.especie):''}"></label>
-    <div class="grid2">
-      <div><h3 style="margin-bottom:6px">Tratada?</h3>${segHTML('amTrat', [['N','Não'],['S','Sim']], tratada?'S':'N')}</div>
-      <div><h3 style="margin-bottom:6px">Produtor INOVA?</h3>${segHTML('amInova', [['N','Não'],['S','Sim']], inova?'S':'N')}</div>
-    </div>
+    <div><h3 style="margin-bottom:6px">Tratada?</h3>${segHTML('amTrat', [['N','Não'],['S','Sim']], tratada?'S':'N')}</div>
     <div><h3 style="margin-bottom:6px">Tipo de análise</h3>${segHTML('amTA', [['PREV','Prévia'],['DEF','Definitiva'],['INTER','Inter/Intralab.']], ta)}</div>
     <label class="f">Lote/origem (opcional)<input type="text" id="amLote"></label>` : `
     <dl class="kv">${CAMPOS.filter(([k])=>a[k]).map(([k,n])=>`<dt>${n}</dt><dd>${esc(a[k])}</dd><dd></dd>`).join('')}</dl>
@@ -882,12 +878,11 @@ function telaAmostra(c){
       const tsi = L.up(a.remessa)==='TSI'; if(tsi) $('#amTrat').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.v==='S'));
       const trat = segVal('amTrat')==='S';
       a.tratamento = trat ? (L.classificar({ especie:'SOJA', tratamento:a.tratamento }).tratada && a.tratamento ? a.tratamento : 'TRATADA') : '';
-      a.produtor = segVal('amInova')==='S' ? (/INOVA/.test(L.up(a.produtor)) ? a.produtor : 'INOVA GENETICA LTDA') : (/INOVA/.test(L.up(a.produtor)) ? '' : a.produtor);
       a.tipoAnalise = { PREV:'ANÁLISE PRÉVIA(CQI)', DEF:'ANÁLISE DEFINITIVA', INTER:'INTER|INTRALABORATO' }[segVal('amTA')];
       db.ultEspecie = esp==='OUTRA' ? db.ultEspecie : esp; save();
       desenharAcoes(c); audit();
     };
-    ['amEsp','amTrat','amInova','amTA'].forEach(id=>$('#'+id).onclick = ev => { const b = ev.target.closest('[data-v]'); if(!b) return; $('#'+id).querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); ler(); });
+    ['amEsp','amTrat','amTA'].forEach(id=>$('#'+id).onclick = ev => { const b = ev.target.closest('[data-v]'); if(!b) return; $('#'+id).querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); ler(); });
     ['#amEspOutra','#amCult','#amRem','#amLote'].forEach(id=>$(id).addEventListener('change', ler));
     $('#amCult').addEventListener('change', ()=>{ const inf = L.inferirEspecie($('#amCult').value); if(inf && !e){ $('#amEsp').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x.dataset.v===inf)); ler(); } });
     ler();
@@ -899,7 +894,7 @@ function telaAmostra(c){
 function desenharAcoes(c){
   const { a, e } = c;
   const cls = L.classificar(a);
-  $('#amChips').innerHTML = `${L.ehPureza(a.protocolo)?'<span class="pill bad">Pureza</span>':''}<span class="pill ${cls.classificacao==='Protocolo'?'acc':'warn'}">${esc(cls.classificacao)}</span>${grupoPill(cls.grupo)}<span class="pill mut">${esc(cls.cultura)}</span><span class="pill mut">${cls.tratada?'Tratada':'Sem tratamento'}</span>${cls.inova?'<span class="pill bad">INOVA GENÉTICA</span>':''}`;
+  $('#amChips').innerHTML = `${L.ehPureza(a.protocolo)?'<span class="pill bad">Pureza</span>':''}<span class="pill ${cls.classificacao==='Protocolo'?'acc':'warn'}">${esc(cls.classificacao)}</span>${grupoPill(cls.grupo)}<span class="pill mut">${esc(cls.cultura)}</span><span class="pill mut">${cls.tratada?'Tratada':'Sem tratamento'}</span>`;
   const salas = L.SALAS.map((s,i)=>`<button class="btn sec sm" data-sala="${i}">${esc(s.replace('Sala de ','').replace(' de sementes',''))}</button>`).join('');
   let h = '';
   const st = e && e.status;
@@ -1452,8 +1447,7 @@ function renderMais(){
     return `<tr><td style="background:${g.cor};color:${g.tinta};font-weight:700;width:34%">${esc(g.curto)}</td><td>${DESC[k] || esc(tipos.join(', ') || g.nome)}</td></tr>`; }).join('')
     + `<tr><td colspan="2" style="font-weight:700;padding-top:10px">Também separam por andar</td></tr>`
     + [['Cultura', 'Soja, milho, trigo… cada cultura no seu andar'],
-       ['Tratamento', 'Amostras tratadas (produto de tratamento no campo Tratamento) vão com o TSI; o operador confirma em Corrigir dados da amostra'],
-       ['INOVA GENÉTICA', 'Andar exclusivo, separado dos demais produtores']]
+       ['Tratamento', 'Amostras tratadas (produto de tratamento no campo Tratamento) vão com o TSI; o operador confirma em Corrigir dados da amostra']]
       .map(([a,b])=>`<tr><td style="font-weight:700;width:34%">${esc(a)}</td><td>${esc(b)}</td></tr>`).join('');
 }
 $('#btnRef').onclick = async () => { try{ toast('Baixando referência…'); await baixarRef(true); renderMais(); toast('Referência atualizada: '+REF.size+' amostras.'); }catch(e){ toast(e.message); } };
@@ -1621,7 +1615,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.11.05b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.05b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.11.06a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.06a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

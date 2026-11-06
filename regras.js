@@ -100,9 +100,14 @@
   function perfil(a, embalagem) {
     const c = classificar(a);
     // o produtor (ex.: INOVA GENÉTICA) não separa andar desde 06/11/2026
-    return { cultura: c.cultura, tratada: c.tratada, grupo: c.grupo, definitiva: c.definitiva, embalagem: embalagem || a.embalagem || '' };
+    return { cultura: c.cultura, tratada: c.tratada, grupo: c.grupo, grupoAndar: grupoDoAndar(c.cultura, c.grupo), definitiva: c.definitiva, embalagem: embalagem || a.embalagem || '' };
   }
-  const chavePerfil = p => [p.cultura, p.tratada ? 'TRAT' : 'SEM', p.grupo, p.definitiva ? 'DEF' : 'PREV', p.embalagem].join('|');
+  /* grupos que dividem o mesmo andar (a amostra continua com o seu grupo para cor, filtros e conciliação):
+     milho — Pré-lote fica junto com Prévia (CQI) (desde 06/11/2026) */
+  const ANDAR_JUNTO = { MILHO: { PRELOTE: 'VERDE' } };
+  const grupoDoAndar = (cultura, grupo) => ((ANDAR_JUNTO[up(cultura)] || {})[grupo]) || grupo;
+  const gA = p => p.grupoAndar || grupoDoAndar(p.cultura, p.grupo);
+  const chavePerfil = p => [p.cultura, p.tratada ? 'TRAT' : 'SEM', gA(p), p.definitiva ? 'DEF' : 'PREV', p.embalagem].join('|');
   // resumo dos perfis por andar, ex.: "A.01–A.02: SOJA · … · A.03: MILHO · … · A.04: livre"
   function textoAndares(x) {
     if (!x || !x.andares) return 'Livre';
@@ -110,7 +115,9 @@
   }
   function textoPerfil(p) {
     if (!p) return 'Livre';
-    return [p.cultura, p.tratada ? 'Tratada' : 'Sem tratamento', ((GRUPOS[p.grupo] || {}).curto || p.grupo) + (p.definitiva && p.grupo !== 'DEFINITIVA' && p.grupo !== 'TSI_DEF' ? ' (Definitiva)' : '')].join(' · ');
+    const juntos = Object.keys(GRUPOS).filter(g => g === gA(p) || grupoDoAndar(p.cultura, g) === gA(p));
+    const nomeG = juntos.length > 1 ? juntos.map(g => (GRUPOS[g] || {}).curto || g).join(' / ') : ((GRUPOS[p.grupo] || {}).curto || p.grupo);
+    return [p.cultura, p.tratada ? 'Tratada' : 'Sem tratamento', nomeG + (p.definitiva && p.grupo !== 'DEFINITIVA' && p.grupo !== 'TSI_DEF' ? ' (Definitiva)' : '')].join(' · ');
   }
   // explica por que a amostra não pode entrar num andar com outro perfil (a separação é por ANDAR da prateleira)
   function motivosIncompat(pa, pb) {
@@ -118,8 +125,8 @@
     if (pa.embalagem !== pb.embalagem) m.push('embalagem diferente (' + nomeEmb(pb.embalagem) + ')');
     if (pa.cultura !== pb.cultura) m.push('cultura diferente neste andar (' + pb.cultura + ')');
     if (pa.tratada !== pb.tratada) m.push(pb.tratada ? 'andar de amostras tratadas' : 'andar de amostras sem tratamento');
-    if (!!pa.definitiva !== !!pb.definitiva && pa.grupo === pb.grupo) m.push(pb.definitiva ? 'andar de análise DEFINITIVA' : 'análise DEFINITIVA não fica no mesmo andar da análise prévia');
-    if (pa.grupo !== pb.grupo) m.push('andar com tipo de remessa de outro grupo (' + ((GRUPOS[pb.grupo] || {}).curto || pb.grupo) + ')');
+    if (!!pa.definitiva !== !!pb.definitiva && gA(pa) === gA(pb)) m.push(pb.definitiva ? 'andar de análise DEFINITIVA' : 'análise DEFINITIVA não fica no mesmo andar da análise prévia');
+    if (gA(pa) !== gA(pb)) m.push('andar com tipo de remessa de outro grupo (' + ((GRUPOS[pb.grupo] || {}).curto || pb.grupo) + ')');
     return m;
   }
 
@@ -633,7 +640,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.11.06a',
+    VERSAO_REGRAS: '2026.11.06b',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, ehCaixinha, gradePara, TESTES, nomeTeste, listaTestes, testesRef, definirReservas, chaveAndar, textoAndar, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

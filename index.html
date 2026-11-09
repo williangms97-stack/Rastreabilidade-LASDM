@@ -40,9 +40,9 @@
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.11.09a"></script>
+<script src="regras.js?v=2026.11.09b"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.11.09a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.11.09b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -337,7 +337,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.11.09a</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.11.09b</div>
     </section>
   </main>
 
@@ -894,9 +894,9 @@ function telaAmostra(c){
 function desenharAcoes(c){
   const { a, e } = c;
   const cls = L.classificar(a);
-  $('#amChips').innerHTML = `${L.ehPureza(a.protocolo)?'<span class="pill bad">Pureza</span>':''}<span class="pill ${cls.classificacao==='Protocolo'?'acc':'warn'}">${esc(cls.classificacao)}</span>${grupoPill(cls.grupo)}<span class="pill mut">${esc(cls.cultura)}</span><span class="pill mut">${cls.tratada?'Tratada':'Sem tratamento'}</span>`;
+  $('#amChips').innerHTML = `${L.ehPureza(a.protocolo)?'<span class="pill bad">Pureza</span>':''}${L.ehInova(a.produtor)?'<span class="pill" style="background:#fff;border:2.5px solid #FF7A00;color:#9a4300">INOVA GENÉTICA</span>':''}<span class="pill ${cls.classificacao==='Protocolo'?'acc':'warn'}">${esc(cls.classificacao)}</span>${grupoPill(cls.grupo)}<span class="pill mut">${esc(cls.cultura)}</span><span class="pill mut">${cls.tratada?'Tratada':'Sem tratamento'}</span>`;
   const salas = L.SALAS.map((s,i)=>`<button class="btn sec sm" data-sala="${i}">${esc(s.replace('Sala de ','').replace(' de sementes',''))}</button>`).join('');
-  let h = '';
+  let h = L.ehInova(a.produtor) ? '<div class="alert" style="border:2px solid #FF7A00;background:#fff1e3;color:#7a3400;font-weight:700;margin-bottom:8px">● Amostra do produtor INOVA GENÉTICA</div>' : '';
   const st = e && e.status;
   const noArquivo = st==='ARQUIVO', emSala = st==='SALA';
   if(!cls.armazena && !noArquivo && !emSala){
@@ -1616,7 +1616,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.11.09a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.09a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.11.09b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.09b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

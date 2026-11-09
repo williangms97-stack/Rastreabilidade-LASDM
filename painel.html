@@ -43,9 +43,9 @@
   };
 })();
 </script>
-<script src="regras.js?v=2026.11.09a"></script>
+<script src="regras.js?v=2026.11.09b"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.11.09a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.11.09b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -195,6 +195,8 @@ tbody tr:hover{background:#f7fbf9}
 .m2d .gr i{display:block;border-radius:2px;background:#eef2f0;min-height:3px;cursor:pointer;outline-offset:1px}
 .m2d .gr i.oc{box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
 .m2d .gr i.sala{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.75) 0 3px,transparent 3px 6px)}
+.m2d .gr i.inv{outline:3px solid #FF7A00;outline-offset:-3px}
+.m2d .gr i.apag{opacity:.22}
 .m2d .gr i.sel{outline:2.5px solid var(--ink);z-index:1}
 .m2d .gr i.meia{background-image:linear-gradient(transparent 50%,rgba(255,255,255,.65) 50%)}
 .m2d .eixo{display:grid;grid-template-columns:44px minmax(0,1fr);gap:6px;font-size:11px;color:var(--muted)}
@@ -310,7 +312,7 @@ tbody tr:hover{background:#f7fbf9}
       <div class="vzg">
         <div class="vz3d" id="vz3d"><div class="msg" id="vzMsg">Carregando a visão 3D…</div><div class="vzbtns"><button id="vzFrente" title="Ver de frente">Frente</button><button id="vzLado" title="Ver em perspectiva">Perspectiva</button></div><div class="dica">Frente = lado do corredor · Linha 01 à esquerda · altura A embaixo</div></div>
         <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="sub" style="margin:0">Camada:</span><div class="seg2" id="vzCam"></div><span class="sub" style="margin:0" id="vzCont"></span></div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="sub" style="margin:0">Camada:</span><div class="seg2" id="vzCam"></div><span class="sub" style="margin:0" id="vzCont"></span><label class="sub" style="margin:0;display:flex;gap:5px;align-items:center;cursor:pointer" id="vzInovaBox" hidden><input type="checkbox" id="vzInova"> Só INOVA GENÉTICA</label></div>
           <div class="m2d" id="vz2d"></div>
           <div class="vzinfo" id="vzInfo"></div>
           <div class="vzimp"><span class="sub" style="margin:0">Etiquetas de endereço:</span>
@@ -455,7 +457,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.11.09a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.09a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.11.09b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.09b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -586,7 +588,7 @@ function render(){
   renderMovimentos();
   renderRefStatus();
   renderCadastro();
-  $('#rodape').textContent = `Painel versão 2026.11.09a · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
+  $('#rodape').textContent = `Painel versão 2026.11.09b · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -1111,15 +1113,19 @@ addEventListener('popstate', ()=>irPara(location.hash.slice(1), true));
 function ligarTips(){ const tip = $('#tip'); document.querySelectorAll('[data-tip]').forEach(el=>{ el.onmousemove = e=>{ tip.innerHTML = el.dataset.tip; tip.hidden = false; let x = e.clientX+14, y = e.clientY+14; if(x+tip.offsetWidth>innerWidth-8) x = e.clientX-tip.offsetWidth-14; tip.style.left = x+'px'; tip.style.top = y+'px'; }; el.onmouseleave = ()=>tip.hidden = true; }); }
 
 /* ---------- visualização da prateleira: 3D (three.js) + mapa 2D ---------- */
-const VZ = { num:null, lado:null, sel:null, t:null };
+const VZ = { num:null, lado:null, sel:null, t:null, soInova:false };
 function slotsPrat(p){
   const occ = {};
   Object.values(EST).forEach(e=>{ if(e.slot && e.slot.prateleira===p.numero && (e.status==='ARQUIVO' || e.status==='SALA')) occ[L.chaveSlot(e.slot)] = e; });
   return occ;
 }
 const corAm = e => (L.GRUPOS[L.classificar(e).grupo] || L.GRUPOS.OUTROS).cor;
+// produtor: o da planilha de referência vale (se a amostra entrou sem produtor e a planilha chegou depois, ela é identificada); senão o gravado no movimento
+let REF_PROD = null, REF_PROD_DE = null;
+const produtorDe = e => { if(REF_PROD_DE !== REF){ REF_PROD = new Map(); REF.forEach(r=>{ if(r.produtor) REF_PROD.set(r.prot, r.produtor); }); REF_PROD_DE = REF; } return REF_PROD.get(e.protocolo) || e.produtor || ''; };
+const inovaAm = e => L.ehInova(produtorDe(e));
 const COR_SALA = '#e8913a';
-function tipAm(e, p){ const ea = (e.slot && L.embAndar(p, e.slot.andar, EST)) || e.embalagem; return `<b class="mono">${esc(e.protocolo)}</b><br>${esc(L.textoSlot(e.slot, ea))}<br>${esc([e.especie, e.cultivar].filter(Boolean).join(' · '))}<br>${esc(e.remessa||e.classificacao||'')}${e.embalagem && e.embalagem!==ea ? '<br>'+esc(L.nomeEmb(e.embalagem)) : ''}${e.status==='SALA' ? '<br><b>Em sala:</b> '+esc(e.local) : ''}`; }
+function tipAm(e, p){ const ea = (e.slot && L.embAndar(p, e.slot.andar, EST)) || e.embalagem; return `<b class="mono">${esc(e.protocolo)}</b><br>${esc(L.textoSlot(e.slot, ea))}<br>${esc([e.especie, e.cultivar].filter(Boolean).join(' · '))}<br>${esc(e.remessa||e.classificacao||'')}${e.embalagem && e.embalagem!==ea ? '<br>'+esc(L.nomeEmb(e.embalagem)) : ''}${e.status==='SALA' ? '<br><b>Em sala:</b> '+esc(e.local) : ''}${inovaAm(e) ? '<br><b style="color:#c25a00">INOVA GENÉTICA</b>' : ''}`; }
 function renderViz(){
   const prats = prateleiras().slice().sort((a,b)=>a.numero-b.numero);
   $('#vzCard').hidden = !prats.length; if(!prats.length) return;
@@ -1141,11 +1147,13 @@ function renderViz(){
   const grupos = [...new Set(Object.values(occ).map(e=>L.classificar(e).grupo))];
   $('#vzLeg').innerHTML = grupos.map(g=>{ const G = L.GRUPOS[g]||L.GRUPOS.OUTROS; return `<span><i style="background:${G.cor}"></i>${esc(G.curto||g)}</span>`; }).join('')
     + `<span><i style="background:#eef2f0"></i>Livre</span>`
+    + (Object.values(occ).some(inovaAm) ? `<span><i style="background:#fff;outline:3px solid #FF7A00;outline-offset:-3px"></i><b>INOVA GENÉTICA</b> (contorno)</span>` : '')
     + (Object.values(occ).some(e=>L.ehSubLado(e.slot.lado) && DA[e.slot.andar].codigo==='CX1') ? `<span><i style="background:linear-gradient(#83E28E 50%,#d9f4dc 50%)"></i>Caixinha 0,5 kg</span>` : '');
   // camadas (profundidade)
   $('#vzCam').innerHTML = camadas.slice().reverse().map(l=>`<button data-l="${l}" aria-pressed="${l===VZ.lado}">${esc(L.nomeLado(l))}</button>`).join('');
   const n = Object.keys(occ).length, cap = L.capEst(p, EST);
-  $('#vzCont').textContent = `${n} de ${cap} posições ocupadas`;
+  $('#vzCont').textContent = `${n} de ${cap} posições ocupadas` + (Object.values(occ).some(inovaAm) ? ` · ${Object.values(occ).filter(inovaAm).length} INOVA` : '');
+  $('#vzInovaBox').hidden = !Object.values(EST).some(e=>e.slot && inovaAm(e));
   // mapa 2D: um quadro por andar (A.04 em cima), cada um com a grade da sua embalagem; linhas nas colunas, alturas nas linhas (A embaixo)
   const misto = L.embPrat(p, EST)==='MISTO', mesmas = new Set([1,2,3,4].map(a=>DA[a].linhas)).size===1;
   const curta = d => d.livre ? 'Livre' : d.codigo==='CX1' ? '1 kg' : d.codigo==='CX05' ? '0,5 kg' : 'Kraft';
@@ -1155,7 +1163,7 @@ function renderViz(){
     const E = DA[a], ld = ladoNo(a, VZ.lado); let cel = '';
     for(let al=E.alturas; al>=1; al--) for(let li=1; li<=E.linhas; li++){
       const s0 = { prateleira:p.numero, andar:a, linha:li, lado:ld, altura:al }, e = naCamada(a, li, al, ld), k = e ? L.chaveSlot(e.slot) : L.chaveSlot(s0);
-      const cls = e ? 'oc' + (e.status==='SALA' ? ' sala' : '') + (L.ehSubLado(e.slot.lado) && E.codigo==='CX1' ? ' meia' : '') : '';
+      const inv = e && inovaAm(e), cls = e ? 'oc' + (e.status==='SALA' ? ' sala' : '') + (L.ehSubLado(e.slot.lado) && E.codigo==='CX1' ? ' meia' : '') + (inv ? ' inv' : '') + (VZ.soInova && !inv ? ' apag' : '') : '';
       const tip = e ? tipAm(e, p) : `<b>Livre</b><br>${esc(L.textoSlot(s0, E.codigo))}${E.livre ? '<br>Andar livre: assume a embalagem da 1ª amostra' : ''}`;
       cel += `<i class="${cls}${VZ.sel===k?' sel':''}" data-k="${k}" style="${e?'background-color:'+(e.status==='SALA'?COR_SALA:corAm(e)):''}" data-tip="${tip.replace(/"/g,'&quot;')}"></i>`;
     }
@@ -1179,6 +1187,7 @@ function montarImpLin(lin){
 $('#impAndar').onchange = () => montarImpLin();
 $('#vzP').onchange = () => { VZ.num = +$('#vzP').value; VZ.lado = null; VZ.sel = null; renderViz(); };
 $('#vzCam').onclick = e => { const b = e.target.closest('[data-l]'); if(!b) return; VZ.lado = b.dataset.l; renderViz(); };
+$('#vzInova').onchange = () => { VZ.soInova = $('#vzInova').checked; renderViz(); };
 $('#vz2d').onclick = e => { const c = e.target.closest('[data-k]'); if(!c) return; VZ.sel = VZ.sel===c.dataset.k ? null : c.dataset.k; renderViz(); };
 $('#prats').addEventListener('click', e => { const c = e.target.closest('[data-prat]'); if(!c) return; VZ.num = +c.dataset.prat; VZ.lado = null; VZ.sel = null; renderViz(); abrirViz(); $('#vzCard').scrollIntoView({ behavior:'smooth', block:'start' }); });
 
@@ -1247,11 +1256,13 @@ async function cena3D(p, DA, occ){
     const tot = [1,2,3,4].reduce((t,a)=>t + DA[a].linhas*Math.max(4, DA[a].lados.length)*DA[a].alturas, 0), geo = new THREE.BoxGeometry(1,1,1);
     G3.vz = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color:0x8fa69c, transparent:true, opacity:0.035, depthWrite:false }), tot); g.add(G3.vz);
     G3.oc = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color:0xffffff }), tot*2); g.add(G3.oc);
+    // contorno laranja das caixinhas INOVA GENÉTICA: uma caixa um pouco maior, só com as faces de trás (aparece como borda grossa)
+    G3.inv = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color:0xFF7A00, side:THREE.BackSide }), tot*2); G3.inv.count = 0; g.add(G3.inv);
     G3.cena.add(g); G3.chave = chave; G3.vistaFeita = false; G3.bordas = null;
   }
   // posiciona as caixinhas
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(), cor = new THREE.Color();
-  let iv = 0, io = 0; G3.itens = [];
+  let iv = 0, io = 0, ii = 0; G3.itens = [];
   const xyz = (s, il, nl) => [ -W/2 + (s.linha-0.5)*cwA(s.andar), base + Ha*(s.andar-1) + (s.altura-0.5)*chA(s.andar), -D/2 + (il+0.5)*D/nl ];
   // posições livres (fantasma): uma por posição da prateleira, se não houver nada nela (nem caixinha de 0,5 kg naquela metade)
   const temSub = {}; Object.values(occ).forEach(e=>{ if(DA[e.slot.andar].codigo==='CX1' && L.ehSubLado(e.slot.lado)) temSub[[e.slot.andar, e.slot.linha, e.slot.lado.charAt(0), e.slot.altura].join('-')] = 1; });
@@ -1266,6 +1277,8 @@ async function cena3D(p, DA, occ){
     const [x,y,z] = xyz(e.slot, il, lados.length), prof = D/lados.length;
     m.compose(v.set(x,y,z), q, sc.set(cwA(e.slot.andar)*0.9, chA(e.slot.andar)*0.86, prof*0.92)); G3.oc.setMatrixAt(io, m);
     cor.set(k===VZ.sel ? '#173f35' : e.status==='SALA' ? COR_SALA : corAm(e)); if(k!==VZ.sel && e.status!=='SALA') cor.lerp(new THREE.Color('#c9b48f'), 0.18);
+    const inv = inovaAm(e); if(VZ.soInova && !inv && k!==VZ.sel) cor.lerp(new THREE.Color('#eef2f0'), 0.8);
+    if(inv && G3.inv){ m.compose(v.set(x,y,z), q, sc.set(cwA(e.slot.andar)*0.9*1.16, chA(e.slot.andar)*0.86*1.14, prof*0.92*1.1)); G3.inv.setMatrixAt(ii++, m); }
     G3.oc.setColorAt(io, cor); G3.itens[io] = { k, e }; io++;
   });
   // contorno escuro fino nas caixinhas ocupadas (deixa cada caixinha bem definida)
@@ -1275,6 +1288,7 @@ async function cena3D(p, DA, occ){
       e12.forEach(([a,b])=>pos.push(cant[a].x,cant[a].y,cant[a].z,cant[b].x,cant[b].y,cant[b].z)); }
     const gb = new THREE.BufferGeometry(); gb.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     G3.bordas = new THREE.LineSegments(gb, new THREE.LineBasicMaterial({ color:0x3a4a44, transparent:true, opacity:0.55 })); G3.grupo.add(G3.bordas); }
+  if(G3.inv){ G3.inv.count = ii; G3.inv.instanceMatrix.needsUpdate = true; }
   G3.vz.count = iv; G3.oc.count = io; G3.vz.instanceMatrix.needsUpdate = true; G3.oc.instanceMatrix.needsUpdate = true; if(G3.oc.instanceColor) G3.oc.instanceColor.needsUpdate = true;
   ajustar3D(); if(!G3.vistaFeita){ vista3D('perspectiva'); G3.vistaFeita = true; } else desenhar3D();
 }

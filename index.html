@@ -15,7 +15,7 @@
   const SUPA_URL = 'https://bnlqboemqhyjubndmnif.supabase.co', SUPA_KEY = 'sb_publishable_nD_ikw_0-8uDAbPL730qrQ_wWMHDpCm', BASE = SUPA_URL + '/lasdm';
   const H = { apikey:SUPA_KEY, Authorization:'Bearer ' + SUPA_KEY };
   const nativo = window.fetch.bind(window);
-  const rpc = async (fn, args) => { const r = await nativo(SUPA_URL + '/rest/v1/rpc/' + fn, { method:'POST', headers:Object.assign({ 'Content-Type':'application/json' }, H), body:JSON.stringify(args) });
+  const rpc = async (fn, args, signal) => { const r = await nativo(SUPA_URL + '/rest/v1/rpc/' + fn, { method:'POST', headers:Object.assign({ 'Content-Type':'application/json' }, H), body:JSON.stringify(args), signal });
     const t = await r.text(); if(!r.ok){ let m = ''; try{ const j = JSON.parse(t); m = j.message || j.error || ''; }catch(e){} return JSON.stringify({ ok:false, erro: m || ('Erro ' + r.status + ' na planilha') }); } return t; };
   async function subirFoto(m){   // foto da etiqueta → pasta "fotos" do Supabase; o movimento guarda só o link
     const nome = String(m.id) + '.jpg', b = Uint8Array.from(atob(m.foto), c => c.charCodeAt(0));
@@ -35,14 +35,14 @@
     }
     const p = Object.fromEntries(new URLSearchParams(url.split('?')[1] || ''));   // (o painel tem uma variável chamada URL)
     if(p.acao === 'reserva') return resp(await rpc('api_reserva', { d:{ op:'listar' } }));
-    return resp(await rpc('api_get', { p }));
+    return resp(await rpc('api_get', { p }, opts && opts.signal));
   };
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.11.09b"></script>
+<script src="regras.js?v=2026.11.09c"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.11.09b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.11.09c'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -337,7 +337,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.11.09b</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.11.09c</div>
     </section>
   </main>
 
@@ -473,10 +473,17 @@ async function baixarRef(forcar){
   REF = new Map((j.ref||[]).map(x=>[x.prot, x])); db.refEm = Date.now(); save();
   await cachePut('ref', { lista:[...REF.values()], em:Date.now() });
 }
-async function buscarRef(prot){
+/* consulta com limite de tempo: com internet lenta, a ficha não fica presa esperando */
+async function fetchT(url, ms){
+  const ac = new AbortController(), t = setTimeout(()=>ac.abort(), ms);
+  try{ return await fetch(url, { redirect:'follow', signal:ac.signal }); } finally{ clearTimeout(t); }
+}
+const REF_LENTA = new Set();   // protocolos cuja consulta à planilha passou do limite de tempo
+async function buscarRef(prot, ms = 4000){
   if(REF.has(prot)) return REF.get(prot);
   if(db.url && navigator.onLine){
-    try{ const j = await lerResposta(await fetch(db.url + '?acao=ref&prot=' + encodeURIComponent(prot), { redirect:'follow' })); if(j.ref && j.ref[0]){ REF.set(prot, j.ref[0]); return j.ref[0]; } }catch(e){}
+    try{ const j = await lerResposta(await fetchT(db.url + '?acao=ref&prot=' + encodeURIComponent(prot), ms)); REF_LENTA.delete(prot); if(j.ref && j.ref[0]){ REF.set(prot, j.ref[0]); return j.ref[0]; } }
+    catch(e){ if(e && e.name==='AbortError') REF_LENTA.add(prot); }
   }
   return null;
 }
@@ -760,7 +767,7 @@ async function conferirProtocolo(prot, lido, escolhido){
   if(!lido.cultivar && !lido.remessa) return { prot, ref };
   const viz = L.protVizinhos(prot);
   let cands = viz.filter(p=>REF.has(p)).map(p=>REF.get(p));
-  if(db.url && navigator.onLine){ try{ const j = await lerResposta(await fetch(db.url + '?acao=ref&prots=' + encodeURIComponent(viz.join(',')), { redirect:'follow' })); (j.ref||[]).forEach(r=>{ REF.set(r.prot, r); if(!cands.some(c=>c.prot===r.prot)) cands.push(r); }); }catch(e){} }
+  if(db.url && navigator.onLine){ try{ const j = await lerResposta(await fetchT(db.url + '?acao=ref&prots=' + encodeURIComponent(viz.join(',')), 4000)); (j.ref||[]).forEach(r=>{ REF.set(r.prot, r); if(!cands.some(c=>c.prot===r.prot)) cands.push(r); }); }catch(e){} }
   const bons = cands.map(r=>({ r, n:L.notaEtiqueta(lido, r), c:L.chanceTroca(prot, r.prot) })).filter(x=>x.n>=1 && x.n>nota).sort((a,b)=>b.n-a.n || b.c-a.c);
   if(!bons.length) return { prot, ref };
   if(bons.length===1 || bons[0].n > bons[1].n || bons[0].c > bons[1].c) return { prot:bons[0].r.prot, ref:bons[0].r, corrigido:prot, outros:bons.slice(1,4).filter(x=>x.n===bons[0].n).map(x=>x.r.prot) };
@@ -796,8 +803,15 @@ async function abrirAmostra(prot, ctx={}){
   a.categoria = (base && base.categoria) || (ref0 && ref0.categoria) || '';
   if(ref0 && ref.data) a.dataReceb = ref0.data;
   const ctxA = { prot, ref, e, ctx, a, emb: pureza ? 'KRAFT' : (e && e.embalagem) || db.embPadrao || 'CX1', editar: !base };
+  ctxA.refLenta = !ref && REF_LENTA.has(L.protBase(prot));
   telaAmostra(ctxA);
+  // internet lenta: continua buscando a planilha por trás e completa a ficha sozinha (se o operador ainda não mexeu nela)
+  if(ctxA.refLenta){ const pb = L.protBase(prot);
+    buscarRef(pb, 25000).then(r=>{ const aberta = AM_ATUAL===ctxA && document.getElementById('amAcoes');
+      if(r && aberta && !ctxA.mexeu){ toast('Dados da planilha carregados.'); abrirAmostra(prot, Object.assign({}, ctx, { escolhido:true })); }
+      else if(aberta){ const el = document.getElementById('amRefLenta'); if(el) el.outerHTML = r ? '<div class="alert ok">Dados da planilha chegaram. Confira os campos.</div>' : '<div class="alert warn">Não foi possível consultar a planilha agora (internet lenta). O registro vale assim mesmo; a conferência fica para o painel.</div>'; } }); }
 }
+let AM_ATUAL = null;
 function validacaoTexto(c){
   const v = [];
   if(c.ref){ const au = auditar(c.a, c.ref); v.push('Planilha ' + (c.ref.origem||'') + ': ' + (au.filter(x=>!x.ok).length ? 'diverge em ' + au.filter(x=>!x.ok).map(x=>x.campo).join(', ') : 'confere')); }
@@ -822,7 +836,7 @@ function auditar(a, ref){
 }
 const segHTML = (id, ops, val, dis) => `<div class="seg" id="${id}">${ops.map(([v,t])=>`<button type="button" data-v="${esc(v)}" aria-pressed="${v===val}" ${dis?'disabled':''}>${esc(t)}</button>`).join('')}</div>`;
 function telaAmostra(c){
-  const { prot, ref, e, ctx, a } = c;
+  const { prot, ref, e, ctx, a } = c; AM_ATUAL = c; c.pronto = false; setTimeout(()=>{ c.pronto = true; }, 0);   // só conta como "mexeu" o que o operador tocar depois de a ficha abrir
   const lido = ctx.lido || {};
   const espSel = ['SOJA','MILHO'].includes(L.up(a.especie)) ? L.up(a.especie) : 'OUTRA';
   const tratada = L.classificar(a).tratada;
@@ -850,6 +864,7 @@ function telaAmostra(c){
     <div class="chips" id="amChips"></div>
     ${ctx.foto?`<img class="thumb" src="${ctx.foto}" alt="Foto da etiqueta">`:`<div class="small">Sem foto da etiqueta${ctx.digitado?' (protocolo digitado)':''}.</div>`}
     <div class="small">${ctx.peloQR?'Reconhecida pelo QR da etiqueta.':lido.prot?`Lido na etiqueta: Prot. ${esc(lido.prot)}${lido.rem?' · Rem. '+esc(lido.rem):''}`:''}${ctx.qr && /^https?:/i.test(ctx.qr)?` · <a href="${esc(ctx.qr)}" target="_blank" rel="noopener">abrir no sistema</a>`:''}</div>
+    ${c.refLenta?`<div class="alert warn" id="amRefLenta">Internet lenta: buscando os dados da planilha… A ficha será completada sozinha quando chegarem.</div>`:''}
     ${ctx.erroOcr?`<div class="alert warn">Leitura do texto indisponível: ${esc(ctx.erroOcr)}</div>`:''}
     ${ctx.corrigido?`<div class="alert ok">Protocolo corrigido pela planilha: a foto foi lida como <b class="mono">${esc(ctx.corrigido)}</b>, mas a cultivar e a remessa da etiqueta batem com <b class="mono">${esc(prot)}</b>.</div>`:''}
     ${ctx.opcoes && ctx.opcoes.length?`<div class="alert warn">${ctx.corrigido?'Também bate com a etiqueta':'A etiqueta bate com mais de um protocolo'}. Confira o número impresso e toque no certo:<div class="row" style="margin-top:8px">${ctx.opcoes.map(p=>`<button class="btn sec sm mono" data-outro="${esc(p)}">${esc(p)}</button>`).join('')}</div></div>`:''}
@@ -872,6 +887,7 @@ function telaAmostra(c){
     const segVal = id => { const b = $('#'+id).querySelector('[aria-pressed=true]'); return b ? b.dataset.v : ''; };
     $('#amCult').value = a.cultivar||''; $('#amRem').value = L.TIPOS_REMESSA.find(t=>L.up(t)===L.up(a.remessa)) || ''; $('#amLote').value = a.lote||'';
     const ler = () => {
+      if(c.pronto) c.mexeu = true;
       const esp = segVal('amEsp'); $('#amEspOutraBox').hidden = esp!=='OUTRA';
       a.especie = esp==='OUTRA' ? L.up($('#amEspOutra').value || 'OUTRA') : esp;
       a.cultivar = L.up($('#amCult').value); a.remessa = esp==='OUTRA' ? '' : $('#amRem').value; a.lote = $('#amLote').value.trim();
@@ -887,7 +903,7 @@ function telaAmostra(c){
     $('#amCult').addEventListener('change', ()=>{ const inf = L.inferirEspecie($('#amCult').value); if(inf && !e){ $('#amEsp').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x.dataset.v===inf)); ler(); } });
     ler();
   } else { desenharAcoes(c); audit(); $('#amEditar').onclick = () => { c.editar = true; telaAmostra(c); }; }
-  $('#amEmb').onclick = ev => { const b = ev.target.closest('[data-emb]'); if(!b) return; c.emb = b.dataset.emb; db.embPadrao = c.emb; save(); $('#amEmb').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); desenharAcoes(c); };
+  $('#amEmb').onclick = ev => { const b = ev.target.closest('[data-emb]'); if(!b) return; c.mexeu = true; c.emb = b.dataset.emb; db.embPadrao = c.emb; save(); $('#amEmb').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); desenharAcoes(c); };
   $('#amFechar').onclick = fecharSheet;
   document.querySelectorAll('[data-outro]').forEach(b=>b.onclick = () => abrirAmostra(b.dataset.outro, Object.assign({}, ctx, { escolhido:true, corrigido:ctx.lidoProt, opcoes:null })));
 }
@@ -1616,7 +1632,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.11.09b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.09b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.11.09c' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.09c' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

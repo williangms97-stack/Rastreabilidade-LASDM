@@ -43,9 +43,9 @@
   };
 })();
 </script>
-<script src="regras.js?v=2026.11.09b"></script>
+<script src="regras.js?v=2026.11.09c"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.11.09b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.11.09c'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* Painel de acompanhamento: faixa de indicadores, ocupação das prateleiras, salas, conciliação com as planilhas e movimentos */
 :root{
@@ -457,7 +457,7 @@ if(!URL){ try{ const d = JSON.parse(localStorage.getItem('lasdm.v1')||'{}'); URL
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.11.09b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.09b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.11.09c' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.09c' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;
@@ -514,21 +514,37 @@ const faAn = r => { const t = L.up(r.tipoAnalise); return /INTER|INTRA/.test(t) 
 const contaPeloGrupo = (r, f) => { const rem = faRem(r); if(f.remessa[rem] === false) return false; return rem === 'MANUAL' || f.analise[faAn(r)] !== false; };
 const contaNoArquivo = (r, f) => { f = f || filtroAtivo(); const ex = f.excecoes && f.excecoes[r.prot]; return ex === true || ex === false ? ex : contaPeloGrupo(r, f); };
 let enviandoRef = false;
+/* referência guardada neste computador (IndexedDB): só baixa de novo quando alguém importar planilhas novas (REF_EM muda) */
+let REF_SERV = '';   // REF_EM da referência que está carregada nesta tela
+function idbRef(modo, valor){
+  return new Promise(res=>{ try{ const rq = indexedDB.open('lasdm-painel', 1); rq.onupgradeneeded = () => rq.result.createObjectStore('kv');
+    rq.onerror = () => res(null);
+    rq.onsuccess = () => { try{ const tx = rq.result.transaction('kv', modo==='ler' ? 'readonly' : 'readwrite'), st = tx.objectStore('kv');
+      if(modo==='ler'){ const g = st.get('ref'); g.onsuccess = () => res(g.result || null); g.onerror = () => res(null); }
+      else { st.put(valor, 'ref'); tx.oncomplete = () => res(true); tx.onerror = () => res(null); } }catch(e){ res(null); } };
+  }catch(e){ res(null); } });
+}
 async function carregar(){
   if(carregando || enviandoRef || !URL) return; carregando = true;
   $('#dot').className = 'dot busy'; $('#liveTxt').textContent = 'Atualizando…';
   try{
     const desde = Date.now() - 60*86400000;
+    // movimentos primeiro: eles trazem a "assinatura" da referência (quando foi importada + nº de linhas); se mudou, recarrega a referência inteira
+    const j = await get('?acao=dados&desde=' + desde);
+    const ri = j.refInfo || {}, serv = ri.atualizada ? ri.atualizada + ' · ' + ri.linhas : '';
+    if(refEm && serv && serv !== REF_SERV){ refEm = 0; REFMAP = new Map(); REF = []; }
+    if(!refEm && serv){ const c = await idbRef('ler'); if(c && c.refEm === serv && Array.isArray(c.lista) && c.lista.length){ REFMAP = new Map(c.lista.map(x=>[x.prot, x])); REF = c.lista; refEm = Date.now(); REF_SERV = serv; } }
     const total = !refEm, buscaRef = total || Date.now() - refEm > REF_INTERVALO;
     let dRef = REF_DESDE; if(!total){ const m = REF.reduce((x,r)=>{ const k = L.dataRefKey(r.data)||''; return k > x ? k : x; }, REF_DESDE), d = new Date(m+'T12:00'); d.setDate(d.getDate()-3); dRef = dkey(d) < REF_DESDE ? REF_DESDE : dkey(d); }
-    const [j, r, fl] = await Promise.all([ get('?acao=dados&desde=' + desde), buscaRef ? get('?acao=ref&desde=' + dRef) : null,
+    const [r, fl] = await Promise.all([ buscaRef ? get('?acao=ref&desde=' + dRef) : null,
       get('?acao=filtro').catch(e=>({ ok:false, erro:e.message })) ]);
     try{ const tt = await get('?acao=testes'); TESTES_CFG = tt.testes && tt.testes.fora ? tt.testes : null; TP_REFEM = tt.refEm || ''; TP_ERRO = ''; }catch(e){ TP_ERRO = e.message || 'indisponível'; }
     try{ const lm = await get('?acao=limites'); LIMITES = lm.limites && lm.limites.salas ? lm.limites : null; LIM_ERRO = ''; }catch(e){ LIM_ERRO = e.message || 'indisponível'; }
     try{ const rs = await get('?acao=reserva'); RESERVAS = rs.reservas || []; RES_AGORA = Number(rs.agora)||Date.now(); RES_ERRO = ''; }catch(e){ RESERVAS = []; RES_ERRO = e.message || 'indisponível'; }
     if(fl && fl.ok){ FILTRO = fl.filtro && fl.filtro.remessa ? fl.filtro : null; FILTRO_HIST = fl.historico || []; FILTRO_ERRO = ''; } else FILTRO_ERRO = (fl && fl.erro) || 'indisponível';
     DADOS = j;
-    if(r){ if(total) REFMAP = new Map(); (r.ref||[]).forEach(x=>REFMAP.set(x.prot, x)); REF = [...REFMAP.values()]; refEm = Date.now(); }
+    if(r){ if(total) REFMAP = new Map(); (r.ref||[]).forEach(x=>REFMAP.set(x.prot, x)); REF = [...REFMAP.values()]; refEm = Date.now();
+      REF_SERV = serv; if(total && serv) idbRef('gravar', { refEm:serv, lista:REF }); }
     MOVS = (j.movimentos||[]).map(m=>Object.assign(m, { ts:Number(m.ts)||0 }));
     EST = L.estadoAtual(MOVS);
     ultimo = Date.now(); $('#erro').hidden = true;
@@ -588,7 +604,7 @@ function render(){
   renderMovimentos();
   renderRefStatus();
   renderCadastro();
-  $('#rodape').textContent = `Painel versão 2026.11.09b · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
+  $('#rodape').textContent = `Painel versão 2026.11.09c · Fonte: Planilha LASDM · ${MOVS.length} movimentos carregados · ${prats.length} prateleiras · referência: ${REF.length.toLocaleString('pt-BR')} amostras recebidas desde ${brk(REF_DESDE)}`;
   ligarTips();
 }
 function barrasDia(serie, S, W){
@@ -1071,7 +1087,7 @@ $('#btnEnviarRef').onclick = async () => {
     $('#refPrev').innerHTML += `<div class="sub">Por espécie: ${Object.entries(esp).map(([k,v])=>esc(k)+' '+v).join(' · ')}</div>`;
     if(man.length) $('#refPrev').innerHTML += `<div class="sub">Planilha manual: ${man.length} protocolos M (abas de espécie)${ignoradas.length?'; abas não usadas: '+esc(ignoradas.join(', '))+' (numeração própria ou cópia)':''}.</div>`;
     if(avisosMan.length) $('#refPrev').innerHTML += `<div class="alert warn"><b>${avisosMan.length} números repetidos na planilha manual</b> (o mesmo protocolo M em duas abas, com amostras diferentes). Ficaram marcados para conferência — corrija a numeração na planilha: ${esc(avisosMan.slice(0,12).join(' · '))}${avisosMan.length>12?' …':''}</div>`;
-    $('#admS').value = ''; enviandoRef = false; refEm = 0; carregar();
+    $('#admS').value = ''; enviandoRef = false; refEm = 0; REF_SERV = ''; await idbRef('gravar', null); carregar();
   }catch(err){ $('#refMsg').innerHTML = `<div class="alert bad">${esc(err.message||err)} Nada foi perdido: clique em "Ler e enviar" de novo.</div>`; }
   finally{ btn.disabled = false; enviandoRef = false; }
 };

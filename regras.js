@@ -45,6 +45,7 @@
     TSI_DEF:    { nome: 'TSI — análise definitiva', curto: 'TSI Definitiva', cor: '#A4472A', tinta: '#ffffff' },
     PRECOLHEITA:{ nome: 'Pré-colheita', curto: 'Pré-colheita', cor: '#FFFF00', tinta: '#4d4a00' },
     PRELOTE:    { nome: 'Pré-lote', curto: 'Pré-lote', cor: '#D86DCD', tinta: '#3d0b37' },
+    SECADOR:    { nome: 'Secador (só milho; soja de secador só registra)', curto: 'Secador', cor: '#C8A27A', tinta: '#3b2611' },
     CARREG:     { nome: 'Carregamentos', curto: 'Carregamentos', cor: '#4D93D9', tinta: '#ffffff' },
     INTERLAB:   { nome: 'Inter/Intralaboratorial', curto: 'Interlab.', cor: '#C9C9C9', tinta: '#1f1f1f' },
     MANUAL:     { nome: 'Amostras manuais', curto: 'Manual', cor: '#E8E2D0', tinta: '#3a3320' },
@@ -82,6 +83,8 @@
     const ehDef = /DEFINITIVA/.test(tipo);
     if (protocolo && ehDef && grupo === 'VERDE') grupo = 'DEFINITIVA';
     if (protocolo && ehDef && grupo === 'TSI') grupo = 'TSI_DEF';
+    // Secador de MILHO é armazenado (desde 09/11/2026) e fica no andar da Prévia (CQI); soja de secador continua só registrando
+    if (protocolo && grupo === 'NAO' && up(a.remessa) === 'SECADOR' && especie === 'MILHO') grupo = 'SECADOR';
     // tratada: remessa TSI ou nome de produto/fórmula de tratamento no campo Tratamento (texto livre da planilha)
     const tratada = grupo === 'TSI' || grupo === 'TSI_DEF' || ehTratamento(a.tratamento);
     // amostra tratada vai com o TSI, qualquer que seja a remessa: análise prévia → TSI; definitiva → TSI Definitiva
@@ -103,8 +106,8 @@
     return { cultura: c.cultura, tratada: c.tratada, grupo: c.grupo, grupoAndar: grupoDoAndar(c.cultura, c.grupo), definitiva: c.definitiva, embalagem: embalagem || a.embalagem || '' };
   }
   /* grupos que dividem o mesmo andar (a amostra continua com o seu grupo para cor, filtros e conciliação):
-     milho — Pré-lote fica junto com Prévia (CQI) (desde 06/11/2026) */
-  const ANDAR_JUNTO = { MILHO: { PRELOTE: 'VERDE' } };
+     milho — Pré-lote (desde 06/11/2026) e Secador (desde 09/11/2026) ficam junto com Prévia (CQI) */
+  const ANDAR_JUNTO = { MILHO: { PRELOTE: 'VERDE', SECADOR: 'VERDE' } };
   const grupoDoAndar = (cultura, grupo) => ((ANDAR_JUNTO[up(cultura)] || {})[grupo]) || grupo;
   const gA = p => p.grupoAndar || grupoDoAndar(p.cultura, p.grupo);
   const chavePerfil = p => [p.cultura, p.tratada ? 'TRAT' : 'SEM', gA(p), p.definitiva ? 'DEF' : 'PREV', p.embalagem].join('|');
@@ -640,7 +643,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.11.06b',
+    VERSAO_REGRAS: '2026.11.09a',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, ehCaixinha, gradePara, TESTES, nomeTeste, listaTestes, testesRef, definirReservas, chaveAndar, textoAndar, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

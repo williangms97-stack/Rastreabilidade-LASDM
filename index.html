@@ -40,9 +40,9 @@
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.11.09c"></script>
+<script src="regras.js?v=2026.11.10a"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.11.09c'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.11.10a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -337,7 +337,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.11.09c</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.11.10a</div>
     </section>
   </main>
 
@@ -749,7 +749,12 @@ function abrirDigitar(ctx={}){
   setTimeout(()=>{ $('#dgProt').focus(); $('#dgProt').select(); }, 60);
   $('#dgCancel').onclick = fecharSheet;
   $('#dgTipo').onclick = ev => { const b = ev.target.closest('[data-v]'); if(!b) return; $('#dgTipo').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); $('#dgProt').focus(); };
-  const ok = async () => { const tipo = $('#dgTipo').querySelector('[aria-pressed=true]').dataset.v; let p = L.normProt($('#dgProt').value); if(!p){ toast('Protocolo inválido.'); return; }
+  // número começando com M = amostra manual, mesmo se o tipo marcado for Sistema (antes o M era descartado e abria outra amostra)
+  const marcaTipo = v => $('#dgTipo').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x.dataset.v===v));
+  const tipoAtual = () => $('#dgTipo').querySelector('[aria-pressed=true]').dataset.v;
+  $('#dgProt').oninput = () => { if(tipoAtual()==='S' && /^\s*M/i.test($('#dgProt').value)) marcaTipo('M'); };
+  if(tipoAtual()==='S' && /^\s*M/i.test($('#dgProt').value)) marcaTipo('M');
+  const ok = async () => { let tipo = $('#dgTipo').querySelector('[aria-pressed=true]').dataset.v; if(tipo==='S' && /^\s*M/i.test($('#dgProt').value)) tipo = 'M'; let p = L.normProt($('#dgProt').value); if(!p){ toast('Protocolo inválido.'); return; }
     p = tipo==='M' ? 'M' + L.protBase(p).replace(/^M/i,'') : L.chaveItem(p.replace(/^M/i,''), tipo==='P'); await abrirAmostra(p, Object.assign(ctx, { digitado:true })); };
   $('#dgOk').onclick = ok; $('#dgProt').onkeydown = e=>{ if(e.key==='Enter') ok(); };
 }
@@ -797,7 +802,8 @@ async function abrirAmostra(prot, ctx={}){
   a.remessa = (base && base.remessa) || tipoOk(lido.remessa) || (ref0 && tipoOk(ref0.remessa)) || '';
   a.especie = (base && base.especie) || lido.especie || (ref0 && ref0.especie) || L.inferirEspecie(a.cultivar) || db.ultEspecie || 'SOJA';
   a.tratamento = base ? (base.tratamento||'') : ref0 ? (ref0.tratamento||'') : '';
-  a.produtor = (base && base.produtor) || (ref0 && ref0.produtor) || '';
+  // produtor: a planilha manda (um registro anterior errado não passa adiante); sem planilha, vale o registro anterior
+  a.produtor = (ref0 && ref0.produtor) || (base && base.produtor) || '';
   a.tipoAnalise = (base && base.tipoAnalise) || (ref0 && ref0.tipoAnalise) || 'ANÁLISE PRÉVIA(CQI)';
   a.lote = (base && base.lote) || (ref0 && ref0.lote) || '';
   a.categoria = (base && base.categoria) || (ref0 && ref0.categoria) || '';
@@ -1632,7 +1638,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.11.09c' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.09c' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.11.10a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.10a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

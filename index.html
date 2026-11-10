@@ -40,9 +40,9 @@
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="regras.js?v=2026.11.10a"></script>
+<script src="regras.js?v=2026.11.10b"></script>
 <script>/* garante que as regras carregadas são da mesma versão do app (o celular às vezes guarda o arquivo antigo) */
-(function(){ var V='2026.11.10a'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
+(function(){ var V='2026.11.10b'; if(!window.LASDM || window.LASDM.VERSAO_REGRAS!==V){ try{ var k='lasdmRecarga'+V; if(!sessionStorage.getItem(k)){ sessionStorage.setItem(k,'1'); location.replace(location.pathname+'?atualizar='+Date.now()+location.hash); } }catch(e){} } })();</script>
 <style>
 /* App de uma coluna para celular: cabeçalho fixo, navegação inferior grande, folhas (sheets) para cada amostra */
 :root{
@@ -337,7 +337,7 @@ table.rg td{border:1px solid var(--line);padding:6px}
         <div class="small">Somente administradores: cadastro de usuários e zerar dados de teste.</div>
         <button class="btn sec" id="btnUsuarios">Gerenciar usuários</button>
       </div>
-      <div class="small" style="text-align:center" id="versao">Versão 2026.11.10a</div>
+      <div class="small" style="text-align:center" id="versao">Versão 2026.11.10b</div>
     </section>
   </main>
 
@@ -1326,10 +1326,10 @@ function loteRemanejar(num, andar, l){
     <div id="lrPlano"></div>
     <div class="row"><button class="btn ghost" id="lrVoltar">Voltar</button><button class="btn" id="lrOk">Confirmar</button></div>`);
   const plano = () => { // simula em sequência num estado de rascunho
-    const pn = +$('#lrP').value, an = +$('#lrA').value, pr = prats.find(p=>p.numero===pn), est = Object.assign({}, EST), out = [];
+    const pn = +$('#lrP').value, an = +$('#lrA').value, pr = prats.find(p=>p.numero===pn), est0 = Object.assign({}, EST), out = []; let est = est0;
     for(const k of prots){ const e = est[k]; let achou = null; const ea = L.embAndar(pr, an, est) || e.embalagem, embS = (ea==='CX1' && e.embalagem==='CX05') ? 'CX05' : ea;
       for(const s of L.ordemSlots(pn, embS, pr.linhas, an)){ if(!L.validarPosicao(ctxDe(e).a, e.embalagem||'CX1', s, est, prateleiras(), k).length){ achou = s; break; } }
-      out.push({ k, slot:achou }); if(achou){ est[k] = Object.assign({}, e, { slot:achou }); } }
+      out.push({ k, slot:achou }); if(achou){ est = Object.assign({}, est, { [k]: Object.assign({}, e, { slot:achou }) }); } }   // objeto novo: o índice de embalagens por andar acompanha
     $('#lrPlano').innerHTML = `<div class="alert ${out.every(x=>x.slot)?'ok':'warn'}">${out.map(x=>`<span class="mono">${esc(x.k)}</span> → ${x.slot?esc(L.textoSlot(x.slot, (EST[x.k]||{}).embalagem)):'<b>sem posição válida neste andar</b>'}`).join('<br>')}</div>`;
     $('#lrOk').disabled = !out.some(x=>x.slot); return out; };
   const andaresDe = () => { const pr = prats.find(p=>p.numero===+$('#lrP').value); $('#lrA').innerHTML = [1,2,3,4].map(a=>{ const ea = L.embAndar(pr, a, EST); return `<option value="${a}" ${aceita(pr,a)?'':'disabled'}>A.${L.p2(a)} · ${esc(ea ? L.nomeEmb(ea) : 'livre')}</option>`; }).join(''); $('#lrA').value = [1,2,3,4].find(a=>aceita(pr,a)); };
@@ -1638,7 +1638,7 @@ function msgLogin(t, tipo){ $('#lgMsg').innerHTML = t ? `<div class="alert ${tip
 /* versão exibida na tela de login: app + script da planilha */
 async function mostrarVersao(url){
   const el = document.getElementById('lgVersao'); if(!el) return;
-  const app = 'App versão 2026.11.10a' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.10a' ? ' (regras desatualizadas: feche e abra de novo)' : '');
+  const app = 'App versão 2026.11.10b' + ((window.LASDM && LASDM.VERSAO_REGRAS) !== '2026.11.10b' ? ' (regras desatualizadas: feche e abra de novo)' : '');
   el.textContent = app + ' · Script: verificando…';
   if(!url){ el.textContent = app; return; }
   try{ const r = await fetch(url, { redirect:'follow' }); const j = await r.json(); const v = Number(j.versao) || 1;

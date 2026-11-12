@@ -429,11 +429,14 @@
     const fmt = p => (ehManual(p) ? 'M ' : '') + milhar(protNum(p)) + (ehPureza(p) && !semP ? ' (P)' : '');
     return out.map(([a, b]) => a === b ? fmt(a) : fmt(a) + ' - ' + fmt(b));
   }
-  function etiquetaLinha(est, prateleira, andar, linha) {
+  // refDe (opcional): protocolo → linha da planilha; completa remessa/análise que ficaram vazias no registro (emblocadas antes da planilha)
+  function etiquetaLinha(est, prateleira, andar, linha, refDe) {
     const am = Object.values(est).filter(e => e.slot && (e.status === 'ARQUIVO' || e.status === 'SALA') && e.slot.prateleira === Number(prateleira) && e.slot.andar === Number(andar) && e.slot.linha === Number(linha));
     const titulo = [];
     am.slice().sort((a, b) => protNum(a.protocolo) - protNum(b.protocolo)).forEach(e => {
-      const t = ehPureza(e.protocolo) ? 'PUREZA' : /DEFINITIVA/.test(up(e.tipoAnalise)) ? 'DEFINITIVA' : (String(e.remessa || '').toUpperCase().trim() || (e.classificacao === 'Protocolo' ? 'PROTOCOLO' : 'AMOSTRA MANUAL'));
+      const r = (refDe && (!e.remessa || !e.tipoAnalise) && refDe(e.protocolo)) || {};
+      const ta = e.tipoAnalise || r.tipoAnalise, rem = e.remessa || r.remessa;
+      const t = ehPureza(e.protocolo) ? 'PUREZA' : /DEFINITIVA/.test(up(ta)) ? 'DEFINITIVA' : (String(rem || '').toUpperCase().trim() || (e.classificacao === 'Protocolo' ? 'PROTOCOLO' : 'AMOSTRA MANUAL'));
       if (titulo.indexOf(t) < 0) titulo.push(t);
     });
     const sp = am.length > 0 && am.every(e => ehPureza(e.protocolo)), fx = l => faixas(l, sp);
@@ -739,7 +742,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.11.12c',
+    VERSAO_REGRAS: '2026.11.12d',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, ehCaixinha, gradePara, ehInova, COR_INOVA, TESTES, nomeTeste, listaTestes, testesRef, definirReservas, chaveAndar, textoAndar, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

@@ -450,8 +450,8 @@
     return { titulo: titulo.join(' / ') || '—', codigo: 'P. ' + p2(prateleira) + ' | A. ' + p2(andar) + ' | L. ' + p2(linha), tras: fx(tras), frente: fx(frente), quartos, total: am.length };
   }
 
-  /* ---------- Etiqueta de endereço da linha (Zebra 104 × 50,8 mm): tamanho fixo, a letra se ajusta ---------- */
-  const ETQ = { larg: 104, alt: 50.8, max: 14, min: 6.5 };   // mm; letra dos protocolos em pt
+  /* ---------- Etiqueta de endereço da linha (Zebra 90 × 40 mm): tamanho fixo, a letra se ajusta ---------- */
+  const ETQ = { larg: 90, alt: 40, max: 14, min: 6.5 };   // mm; letra dos protocolos em pt
   const escH = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   function htmlEtiqueta(et) {
     const it = a => a.length ? a.map(t => `<span>${escH(String(t).replace(' - ', '–'))}</span>`).join(' ') : '<span>—</span>';
@@ -471,15 +471,17 @@
       const t = etq.querySelector('.t'), areas = [...etq.querySelectorAll('.cols > div, .q .v, .q .kg')];
       let ft = 11; t.style.fontSize = ft + 'pt';
       while (ft > 6.5 && t.scrollWidth > t.clientWidth + 1) { ft -= 0.5; t.style.fontSize = ft + 'pt'; }
-      let fv = ETQ.max; const aplica = () => etq.style.setProperty('--fv', fv + 'pt');
-      aplica();
-      while (fv > ETQ.min && !areas.every(cabe)) { fv = Math.max(ETQ.min, fv - 0.25); aplica(); }
+      let fv; const aplica = () => etq.style.setProperty('--fv', fv + 'pt');
+      const encaixa = () => { fv = ETQ.max; aplica(); while (fv > ETQ.min && !areas.every(cabe)) { fv = Math.max(ETQ.min, fv - 0.25); aplica(); } };
+      encaixa();
+      // lista cheia: cabeçalho mais compacto para sobrar espaço aos protocolos
+      if (fv < 10) { etq.classList.add('compacta'); ft = Math.min(ft, 9); t.style.fontSize = ft + 'pt'; while (ft > 6.5 && t.scrollWidth > t.clientWidth + 1) { ft -= 0.5; t.style.fontSize = ft + 'pt'; } encaixa(); }
       if (!areas.every(cabe)) { naoCoube.push((etq.querySelector('.c') || {}).textContent || ''); etq.classList.add('naocabe'); }
     });
     return naoCoube;
   }
   const CSS_ETIQUETA = `
-.etq{box-sizing:border-box;width:104mm;height:50.4mm;padding:1.2mm 1.2mm 1.7mm;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;overflow:hidden;--fv:12pt}
+.etq{box-sizing:border-box;width:90mm;height:39.6mm;padding:1.2mm 1.2mm 1.7mm;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;overflow:hidden;--fv:12pt}
 .etq .in{box-sizing:border-box;height:100%;border:2px solid #000;border-radius:1mm;display:flex;flex-direction:column;overflow:hidden}
 .etq .t{flex:0 0 auto;text-align:center;font-weight:800;font-size:11pt;letter-spacing:.1em;line-height:1.15;padding:.8mm 1mm 0;white-space:nowrap;overflow:hidden}
 .etq .c{flex:0 0 auto;text-align:center;font-weight:800;font-size:15pt;line-height:1.15;padding:0 1mm .6mm;border-bottom:2px solid #000;letter-spacing:.03em;white-space:nowrap}
@@ -496,6 +498,7 @@
 .etq .q .kg.vaz{background:#fff;font-weight:400}
 .etq .q .v{min-height:0;overflow:hidden;padding:.3mm .5mm}
 .etq .q .sep{border-left:2px dashed #000}.etq .q .qs{border-left:1px dotted #777}
+.etq.compacta .t{line-height:1.05;padding-top:.4mm}.etq.compacta .c{font-size:12pt;line-height:1.05;padding-bottom:.3mm}.etq.compacta .cols b{line-height:1.05}
 .etq.naocabe{outline:3px solid #d00}
 .etqs{display:flex;flex-wrap:wrap;gap:10px}
 @media print{
@@ -503,7 +506,7 @@
   html.imp-etq #printArea{display:block!important;position:static!important}
   html.imp-etq .etqs{display:block}
   html.imp-etq,html.imp-etq body{margin:0!important;padding:0!important;background:#fff!important}
-  html.imp-etq .etq{height:50.4mm;break-after:page;page-break-after:always;outline:none}   /* um fio menor que o papel: não gera página em branco */
+  html.imp-etq .etq{height:39.6mm;break-after:page;page-break-after:always;outline:none}   /* um fio menor que o papel: não gera página em branco */
   html.imp-etq .etq:last-child{break-after:auto;page-break-after:auto}
 }`;
   // monta as etiquetas em #printArea, ajusta a letra e chama a impressão no tamanho exato do papel da Zebra
@@ -736,7 +739,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.11.12b',
+    VERSAO_REGRAS: '2026.11.12c',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, ehCaixinha, gradePara, ehInova, COR_INOVA, TESTES, nomeTeste, listaTestes, testesRef, definirReservas, chaveAndar, textoAndar, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

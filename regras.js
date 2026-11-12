@@ -479,7 +479,7 @@
     return naoCoube;
   }
   const CSS_ETIQUETA = `
-.etq{box-sizing:border-box;width:104mm;height:50.8mm;padding:1.2mm;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;overflow:hidden;--fv:12pt}
+.etq{box-sizing:border-box;width:104mm;height:50.4mm;padding:1.2mm 1.2mm 1.7mm;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;overflow:hidden;--fv:12pt}
 .etq .in{box-sizing:border-box;height:100%;border:2px solid #000;border-radius:1mm;display:flex;flex-direction:column;overflow:hidden}
 .etq .t{flex:0 0 auto;text-align:center;font-weight:800;font-size:11pt;letter-spacing:.1em;line-height:1.15;padding:.8mm 1mm 0;white-space:nowrap;overflow:hidden}
 .etq .c{flex:0 0 auto;text-align:center;font-weight:800;font-size:15pt;line-height:1.15;padding:0 1mm .6mm;border-bottom:2px solid #000;letter-spacing:.03em;white-space:nowrap}
@@ -736,7 +736,7 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.11.12a',
+    VERSAO_REGRAS: '2026.11.12b',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, ehCaixinha, gradePara, ehInova, COR_INOVA, TESTES, nomeTeste, listaTestes, testesRef, definirReservas, chaveAndar, textoAndar, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,

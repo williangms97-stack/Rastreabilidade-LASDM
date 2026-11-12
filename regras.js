@@ -416,7 +416,8 @@
 
   /* ---------- Etiqueta da linha ---------- */
   // agrupa protocolos em faixas de sequência: [13931], [13961-13964]
-  function faixas(prots) {
+  // semP: etiqueta só de Pureza — o título já diz PUREZA, então o número sai sem o "(P)"
+  function faixas(prots, semP) {
     const ordT = { S: 0, M: 1, P: 2 };
     const ps = prots.slice().sort((a, b) => ordT[tipoItem(a)] - ordT[tipoItem(b)] || protAno(a) - protAno(b) || protNum(a) - protNum(b));
     const out = []; let ini = null, ant = null;
@@ -425,7 +426,7 @@
       if (ini) out.push([ini, ant]); ini = p; ant = p;
     });
     if (ini) out.push([ini, ant]);
-    const fmt = p => (ehManual(p) ? 'M ' : '') + milhar(protNum(p)) + (ehPureza(p) ? ' (P)' : '');
+    const fmt = p => (ehManual(p) ? 'M ' : '') + milhar(protNum(p)) + (ehPureza(p) && !semP ? ' (P)' : '');
     return out.map(([a, b]) => a === b ? fmt(a) : fmt(a) + ' - ' + fmt(b));
   }
   function etiquetaLinha(est, prateleira, andar, linha) {
@@ -435,17 +436,94 @@
       const t = ehPureza(e.protocolo) ? 'PUREZA' : /DEFINITIVA/.test(up(e.tipoAnalise)) ? 'DEFINITIVA' : (String(e.remessa || '').toUpperCase().trim() || (e.classificacao === 'Protocolo' ? 'PROTOCOLO' : 'AMOSTRA MANUAL'));
       if (titulo.indexOf(t) < 0) titulo.push(t);
     });
+    const sp = am.length > 0 && am.every(e => ehPureza(e.protocolo)), fx = l => faixas(l, sp);
     const tras = am.filter(e => /^T/.test(e.slot.lado)).map(e => e.protocolo);
     const frente = am.filter(e => /^F/.test(e.slot.lado)).map(e => e.protocolo);
     // linha com caixinhas de 0,5 kg: 4 colunas na ordem física (Trás 02 · Trás 01 · Frente 02 · Frente 01);
     // caixinhas de 1 kg da mesma linha vão numa faixa "1 kg" que atravessa as 2 colunas da metade
     const sub = am.some(e => String(e.slot.lado).length === 2);
     const quartos = sub ? {
-      T2: faixas(am.filter(e => e.slot.lado === 'T2').map(e => e.protocolo)), T1: faixas(am.filter(e => e.slot.lado === 'T1').map(e => e.protocolo)),
-      F2: faixas(am.filter(e => e.slot.lado === 'F2').map(e => e.protocolo)), F1: faixas(am.filter(e => e.slot.lado === 'F1').map(e => e.protocolo)),
-      kgT: faixas(am.filter(e => e.slot.lado === 'T').map(e => e.protocolo)), kgF: faixas(am.filter(e => e.slot.lado === 'F').map(e => e.protocolo))
+      T2: fx(am.filter(e => e.slot.lado === 'T2').map(e => e.protocolo)), T1: fx(am.filter(e => e.slot.lado === 'T1').map(e => e.protocolo)),
+      F2: fx(am.filter(e => e.slot.lado === 'F2').map(e => e.protocolo)), F1: fx(am.filter(e => e.slot.lado === 'F1').map(e => e.protocolo)),
+      kgT: fx(am.filter(e => e.slot.lado === 'T').map(e => e.protocolo)), kgF: fx(am.filter(e => e.slot.lado === 'F').map(e => e.protocolo))
     } : null;
-    return { titulo: titulo.join(' / ') || '—', codigo: 'P. ' + p2(prateleira) + ' | A. ' + p2(andar) + ' | L. ' + p2(linha), tras: faixas(tras), frente: faixas(frente), quartos, total: am.length };
+    return { titulo: titulo.join(' / ') || '—', codigo: 'P. ' + p2(prateleira) + ' | A. ' + p2(andar) + ' | L. ' + p2(linha), tras: fx(tras), frente: fx(frente), quartos, total: am.length };
+  }
+
+  /* ---------- Etiqueta de endereço da linha (Zebra 104 × 50,8 mm): tamanho fixo, a letra se ajusta ---------- */
+  const ETQ = { larg: 104, alt: 50.8, max: 14, min: 6.5 };   // mm; letra dos protocolos em pt
+  const escH = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  function htmlEtiqueta(et) {
+    const it = a => a.length ? a.map(t => `<span>${escH(String(t).replace(' - ', '–'))}</span>`).join(' ') : '<span>—</span>';
+    const topo = `<div class="etq"><div class="in"><div class="t">${escH(et.titulo)}</div><div class="c">${escH(et.codigo)}</div>`;
+    if (!et.quartos) return topo + `<div class="cols"><div><b>TRÁS</b><div class="v">${it(et.tras)}</div></div><div><b>FRENTE</b><div class="v">${it(et.frente)}</div></div></div></div></div>`;
+    // caixinhas de 0,5 kg: 4 colunas na ordem física; faixa "1 kg" quando a linha também tem caixinhas de 1 kg
+    const q = et.quartos, temKg = q.kgT.length || q.kgF.length, kg = (a, cls) => `<div class="kg ${cls}${a.length ? '' : ' vaz'}">${a.length ? '1 kg: ' + it(a) : '—'}</div>`;
+    return topo + `<div class="q${temKg ? ' comkg' : ''}"><div class="h">TRÁS 02</div><div class="h qs">TRÁS 01</div><div class="h sep">FRENTE 02</div><div class="h qs">FRENTE 01</div>
+      ${temKg ? kg(q.kgT, '') + kg(q.kgF, 'sep') : ''}
+      <div class="v">${it(q.T2)}</div><div class="v qs">${it(q.T1)}</div><div class="v sep">${it(q.F2)}</div><div class="v qs">${it(q.F1)}</div></div></div></div>`;
+  }
+  // diminui a letra de cada etiqueta só o necessário para caber; devolve os códigos das que não couberam nem na letra mínima
+  function ajustarEtiquetas(raiz) {
+    const naoCoube = [];
+    const cabe = el => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1;
+    raiz.querySelectorAll('.etq').forEach(etq => {
+      const t = etq.querySelector('.t'), areas = [...etq.querySelectorAll('.cols > div, .q .v, .q .kg')];
+      let ft = 11; t.style.fontSize = ft + 'pt';
+      while (ft > 6.5 && t.scrollWidth > t.clientWidth + 1) { ft -= 0.5; t.style.fontSize = ft + 'pt'; }
+      let fv = ETQ.max; const aplica = () => etq.style.setProperty('--fv', fv + 'pt');
+      aplica();
+      while (fv > ETQ.min && !areas.every(cabe)) { fv = Math.max(ETQ.min, fv - 0.25); aplica(); }
+      if (!areas.every(cabe)) { naoCoube.push((etq.querySelector('.c') || {}).textContent || ''); etq.classList.add('naocabe'); }
+    });
+    return naoCoube;
+  }
+  const CSS_ETIQUETA = `
+.etq{box-sizing:border-box;width:104mm;height:50.8mm;padding:1.2mm;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;overflow:hidden;--fv:12pt}
+.etq .in{box-sizing:border-box;height:100%;border:2px solid #000;border-radius:1mm;display:flex;flex-direction:column;overflow:hidden}
+.etq .t{flex:0 0 auto;text-align:center;font-weight:800;font-size:11pt;letter-spacing:.1em;line-height:1.15;padding:.8mm 1mm 0;white-space:nowrap;overflow:hidden}
+.etq .c{flex:0 0 auto;text-align:center;font-weight:800;font-size:15pt;line-height:1.15;padding:0 1mm .6mm;border-bottom:2px solid #000;letter-spacing:.03em;white-space:nowrap}
+.etq .cols{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 1fr}
+.etq .cols>div{min-height:0;overflow:hidden;padding:.6mm 1mm;text-align:center}
+.etq .cols>div+div{border-left:2px dashed #000}
+.etq .cols b{display:block;font-size:max(7pt,min(10pt,calc(var(--fv) * .8)));line-height:1.2}
+.etq .v{font-size:var(--fv);font-weight:700;line-height:1.25;text-align:center}
+.etq .v span,.etq .kg span{white-space:nowrap}.etq .v span:not(:last-child):after,.etq .kg span:not(:last-child):after{content:" ·";font-weight:400}
+.etq .q{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:auto minmax(0,1fr)}
+.etq .q.comkg{grid-template-rows:auto auto minmax(0,1fr)}
+.etq .q .h{font-weight:800;font-size:max(6.5pt,min(9pt,calc(var(--fv) * .75)));text-align:center;padding:.5mm .3mm 0;white-space:nowrap}
+.etq .q .kg{grid-column:span 2;text-align:center;font-size:calc(var(--fv) * .9);font-weight:700;border-top:1px solid #000;border-bottom:1px solid #000;padding:.2mm .5mm;background:#eee;overflow:hidden;max-height:12mm}
+.etq .q .kg.vaz{background:#fff;font-weight:400}
+.etq .q .v{min-height:0;overflow:hidden;padding:.3mm .5mm}
+.etq .q .sep{border-left:2px dashed #000}.etq .q .qs{border-left:1px dotted #777}
+.etq.naocabe{outline:3px solid #d00}
+.etqs{display:flex;flex-wrap:wrap;gap:10px}
+@media print{
+  html.imp-etq body>*:not(#printArea){display:none!important}
+  html.imp-etq #printArea{display:block!important;position:static!important}
+  html.imp-etq .etqs{display:block}
+  html.imp-etq,html.imp-etq body{margin:0!important;padding:0!important;background:#fff!important}
+  html.imp-etq .etq{height:50.4mm;break-after:page;page-break-after:always;outline:none}   /* um fio menor que o papel: não gera página em branco */
+  html.imp-etq .etq:last-child{break-after:auto;page-break-after:auto}
+}`;
+  // monta as etiquetas em #printArea, ajusta a letra e chama a impressão no tamanho exato do papel da Zebra
+  function imprimirEtiquetasZebra(ets, aviso) {
+    const doc = document, area = doc.getElementById('printArea');
+    if (!doc.getElementById('cssEtq')) { const st = doc.createElement('style'); st.id = 'cssEtq'; st.textContent = CSS_ETIQUETA; doc.head.appendChild(st); }
+    area.innerHTML = `<div class="etqs">${ets.map(htmlEtiqueta).join('')}</div>`;
+    const ant = area.getAttribute('style') || '';
+    area.setAttribute('style', 'display:block;position:fixed;left:-10000px;top:0;visibility:hidden');   // fora da tela, só para medir
+    const nao = ajustarEtiquetas(area);
+    area.setAttribute('style', ant);
+    if (nao.length && aviso && !aviso(nao)) return nao;
+    let pg = doc.getElementById('pgEtq'); if (!pg) { pg = doc.createElement('style'); pg.id = 'pgEtq'; }
+    doc.body.appendChild(pg);   // por último no documento: vence o @page com margem de outras impressões
+    pg.textContent = '@media print{@page{size:' + ETQ.larg + 'mm ' + ETQ.alt + 'mm;margin:0}}';
+    doc.documentElement.classList.add('imp-etq');
+    const fim = () => { doc.documentElement.classList.remove('imp-etq'); pg.textContent = ''; window.removeEventListener('afterprint', fim); };
+    window.addEventListener('afterprint', fim);
+    setTimeout(() => { window.print(); setTimeout(fim, 1500); }, 80);
+    return nao;
   }
 
   /* ---------- Planilhas de referência (sistema e manual) ---------- */
@@ -658,11 +736,11 @@
   function notaEtiqueta(lido, ref) { if (!lido || !ref) return 0; const c = confere(lido.cultivar, ref.cultivar), r = confere(lido.remessa, ref.remessa); if (c === false || r === false) return -1; return (c ? 1 : 0) + (r ? 1 : 0); }
 
   G.LASDM = {
-    VERSAO_REGRAS: '2026.11.10b',
+    VERSAO_REGRAS: '2026.11.12a',
     up, normProt, protNum, protAno, milhar, GRUPOS, REMESSA_GRUPO, TIPOS_REMESSA, CULTURAS_PROTOCOLO, classificar, perfil, chavePerfil, textoPerfil, textoAndares, motivosIncompat,
     lerPlanilhaManual, ehPlanilhaManual, remessaManual,
     EMBALAGENS, ANDARES, LINHAS_OPCOES, EMB_CODIGOS, PRODUTOS_TRATAMENTO, ehTratamento, andaresDe, resumoEmb, embPrat, ordemEndereco, enderecosPulados, textoPulados, embAndar, dimAndar, capAndarPr, capPrat, capAndarEst, capEst, temCaixinha, ladosPara, celulasOcupadas, checarEspaco, celulasLado, ehSubLado, dimPrat, nLinhas, cabeNa, ehCaixinha, gradePara, ehInova, COR_INOVA, TESTES, nomeTeste, listaTestes, testesRef, definirReservas, chaveAndar, textoAndar, descerPilha, chavePilha, nomeEmbAceitas, nomeEmb, capLinha, capAndar, capPrateleira, nomeLado, nomeAltura, chaveSlot, textoSlot, ordemSlots, p2,
-    SALAS, estadoAtual, ocupacao, perfisPrateleiras, foraDaRegra, sugerirPosicao, validarPosicao, faixas, etiquetaLinha,
+    SALAS, estadoAtual, ocupacao, perfisPrateleiras, foraDaRegra, sugerirPosicao, validarPosicao, faixas, etiquetaLinha, htmlEtiqueta, ajustarEtiquetas, imprimirEtiquetasZebra, ETQ,
     ehManual, ehPureza, protBase, chaveItem, tipoItem, lerPlanilhaRef, unirRef, CAMPOS_REF, dataRefKey, lerEtiquetaTexto, confere, protVizinhos, notaEtiqueta, chanceTroca, corrigirCultivar, inferirEspecie, codigoQR
   };
 })(typeof window !== 'undefined' ? window : globalThis);

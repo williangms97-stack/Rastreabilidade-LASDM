@@ -284,8 +284,8 @@ app e painel chamam `api_get {acao:'dados'}` a cada minuto e recebem todos os mo
 
 ### Pontas soltas
 
-- `README.md` desatualizado: ainda tem o passo a passo de implantação pela planilha. Trocar pelo
-  fluxo atual (GitHub Pages + scripts SQL no Supabase).
+- Resolvido em 16/11/2026: `README.md` atualizado para o fluxo atual (GitHub Pages + scripts SQL
+  no Supabase).
 - Numeração dos scripts SQL pula o `02_`. Confirmar se houve um script 02 aplicado direto no
   Supabase sem ir para o repositório.
 - A chave pública do Supabase fica visível no HTML publicado. A segurança depende de as tabelas
